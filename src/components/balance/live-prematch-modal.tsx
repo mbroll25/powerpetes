@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Clock3, ShieldCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ClientPortal } from "@/components/ui/client-portal";
 import { getLolRoleIconSrc } from "@/lib/lol-assets";
 import { cn } from "@/lib/utils";
 
@@ -227,114 +228,116 @@ export function LivePrematchModal({
         : "Ventana cerrada";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 px-4 py-6 backdrop-blur-md">
-      <div className="relative max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[1rem] border border-[#f0ed7e]/30 bg-[#101010] p-5 shadow-[0_2rem_6rem_rgba(0,0,0,0.55)] sm:p-6">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 grid size-9 place-items-center rounded-full border border-[#2a2929] bg-[#151414] text-[#8a8a85] transition hover:border-[#f0ed7e]/40 hover:text-[#f0ed7e]"
-          aria-label="Cerrar pre-partida"
-        >
-          <X className="size-4" />
-        </button>
+    <ClientPortal>
+      <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/72 px-4 py-6 backdrop-blur-md">
+        <div className="relative max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[1rem] border border-[#f0ed7e]/30 bg-[#101010] p-5 shadow-[0_2rem_6rem_rgba(0,0,0,0.55)] sm:p-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 grid size-9 place-items-center rounded-full border border-[#2a2929] bg-[#151414] text-[#8a8a85] transition hover:border-[#f0ed7e]/40 hover:text-[#f0ed7e]"
+            aria-label="Cerrar pre-partida"
+          >
+            <X className="size-4" />
+          </button>
 
-        <div className="mb-5 pr-12">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f0ed7e]">
-            Pre-partida en vivo · Partida #{match.match_number}
-          </p>
+          <div className="mb-5 pr-12">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f0ed7e]">
+              Pre-partida en vivo · Partida #{match.match_number}
+            </p>
 
-          <h2 className="mt-3 text-4xl font-black uppercase tracking-[-0.04em] text-[#f5f5f3]">
-            Equipo Azul vs Equipo Rojo
-          </h2>
+            <h2 className="mt-3 text-4xl font-black uppercase tracking-[-0.04em] text-[#f5f5f3]">
+              Equipo Azul vs Equipo Rojo
+            </h2>
 
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#8a8a85]">
-            Revisá tu equipo y decidí si querés usar tu vale diario. Si perdés
-            con vale activo, no perdés puntos visibles, pero la partida sigue
-            contando para estadísticas y matchmaking.
-          </p>
-        </div>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[#8a8a85]">
+              Revisá tu equipo y decidí si querés usar tu vale diario. Si perdés
+              con vale activo, no perdés puntos visibles, pero la partida sigue
+              contando para estadísticas y matchmaking.
+            </p>
+          </div>
 
-        <div className="mb-5 grid gap-3 md:grid-cols-3">
-          <div className="rounded-[0.75rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Clock3 className="size-4 text-[#f0ed7e]" />
-              <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#f0ed7e]">
-                Ventana de vale
+          <div className="mb-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-[0.75rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Clock3 className="size-4 text-[#f0ed7e]" />
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#f0ed7e]">
+                  Ventana de vale
+                </p>
+              </div>
+
+              <p className="text-3xl font-black text-[#f5f5f3]">
+                {valeWindowOpen ? formatCountdown(secondsRemaining) : "00:00"}
+              </p>
+
+              <p className="mt-1 text-xs text-[#8a8a85]">
+                {valeWindowOpen ? "Tiempo restante" : "Ventana cerrada"}
               </p>
             </div>
 
-            <p className="text-3xl font-black text-[#f5f5f3]">
-              {valeWindowOpen ? formatCountdown(secondsRemaining) : "00:00"}
-            </p>
+            <div className="rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
+                Tu equipo
+              </p>
 
-            <p className="mt-1 text-xs text-[#8a8a85]">
-              {valeWindowOpen ? "Tiempo restante" : "Ventana cerrada"}
-            </p>
+              <p className="mt-2 text-xl font-black text-[#f5f5f3]">
+                {currentPlayer ? formatTeamName(currentPlayer.team) : "-"}
+              </p>
+
+              <p className="mt-1 text-xs text-[#8a8a85]">
+                Rol asignado:{" "}
+                {currentPlayer ? formatRole(currentPlayer.assigned_role) : "-"}
+              </p>
+            </div>
+
+            <div className="rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
+                Vales usados
+              </p>
+
+              <p className="mt-2 text-xl font-black text-[#f5f5f3]">
+                {valeUsedCount}/10
+              </p>
+
+              <p className="mt-1 text-xs text-[#8a8a85]">
+                Tu vale:{" "}
+                {currentPlayerValeUsed
+                  ? "activado"
+                  : dailyValeUsedInAnotherMatch
+                    ? "usado hoy"
+                    : "disponible"}
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4">
-            <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
-              Tu equipo
-            </p>
-
-            <p className="mt-2 text-xl font-black text-[#f5f5f3]">
-              {currentPlayer ? formatTeamName(currentPlayer.team) : "-"}
-            </p>
-
-            <p className="mt-1 text-xs text-[#8a8a85]">
-              Rol asignado:{" "}
-              {currentPlayer ? formatRole(currentPlayer.assigned_role) : "-"}
-            </p>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <TeamList side="blue" players={bluePlayers} />
+            <TeamList side="red" players={redPlayers} />
           </div>
 
-          <div className="rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4">
-            <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
-              Vales usados
-            </p>
+          <div className="mt-5 flex flex-col gap-3 rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-black text-[#f5f5f3]">
+                Decisión de vale diario
+              </p>
 
-            <p className="mt-2 text-xl font-black text-[#f5f5f3]">
-              {valeUsedCount}/10
-            </p>
+              <p className="mt-1 text-xs leading-5 text-[#8a8a85]">
+                El vale se consume si lo activás en esta pre-partida. Si la
+                partida se cancela, el admin la cancela y el vale se devuelve.
+              </p>
+            </div>
 
-            <p className="mt-1 text-xs text-[#8a8a85]">
-              Tu vale:{" "}
-              {currentPlayerValeUsed
-                ? "activado"
-                : dailyValeUsedInAnotherMatch
-                  ? "usado hoy"
-                  : "disponible"}
-            </p>
+            <Button
+              type="button"
+              disabled={buttonDisabled}
+              onClick={() => onUseVale(match.id)}
+              className="h-12 rounded-[0.5rem] border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-5 text-xs font-black uppercase tracking-[0.14em] text-[#75f0a0] hover:bg-[#75f0a0]/15 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <ShieldCheck className="mr-2 size-4" />
+              {isUsingVale ? "Activando..." : buttonLabel}
+            </Button>
           </div>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <TeamList side="blue" players={bluePlayers} />
-          <TeamList side="red" players={redPlayers} />
-        </div>
-
-        <div className="mt-5 flex flex-col gap-3 rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-black text-[#f5f5f3]">
-              Decisión de vale diario
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-[#8a8a85]">
-              El vale se consume si lo activás en esta pre-partida. Si la
-              partida se cancela, el admin la cancela y el vale se devuelve.
-            </p>
-          </div>
-
-          <Button
-            type="button"
-            disabled={buttonDisabled}
-            onClick={() => onUseVale(match.id)}
-            className="h-12 rounded-[0.5rem] border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-5 text-xs font-black uppercase tracking-[0.14em] text-[#75f0a0] hover:bg-[#75f0a0]/15 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            <ShieldCheck className="mr-2 size-4" />
-            {isUsingVale ? "Activando..." : buttonLabel}
-          </Button>
         </div>
       </div>
-    </div>
+    </ClientPortal>
   );
 }

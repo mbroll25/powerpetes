@@ -15,7 +15,7 @@ export function SiteHeader() {
           <div className="relative grid size-12 shrink-0 place-items-center rounded-[0.5rem] bg-[#232121] md:size-14">
             <img
               src="/powerlogo.svg"
-              alt="RiftBalance Pro"
+              alt="Powers Petes"
               className="absolute left-1/2 top-1/2 size-[3.45rem] -translate-x-1/2 -translate-y-1/2 object-contain md:size-17"
             />
           </div>

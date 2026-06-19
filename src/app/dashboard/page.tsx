@@ -245,7 +245,7 @@ export default async function DashboardPage() {
             >
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.32em] text-[#f0ed7e]">
-                  RiftBalance Pro
+                  Powers Petes
                 </p>
 
                 <h1 className="mt-4 text-5xl font-black uppercase tracking-[-0.04em] sm:text-6xl">

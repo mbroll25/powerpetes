@@ -69,7 +69,7 @@ export default async function DashboardHistoryPage() {
             <div className="mb-3 flex items-center gap-2">
               <History className="size-4 text-[#f0ed7e]" />
               <p className="text-xs font-black uppercase tracking-[0.32em] text-[#f0ed7e]">
-                RiftBalance Pro
+                Powers Petes
               </p>
             </div>
 

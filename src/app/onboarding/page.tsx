@@ -49,7 +49,7 @@ export default function OnboardingPage() {
               <p className="text-xs font-black uppercase tracking-[0.16em]">
                 Power Petes
               </p>
-              <p className="text-xs text-[#8a8a85]">RiftBalance Pro</p>
+              <p className="text-xs text-[#8a8a85]">Powers Petes</p>
             </div>
           </div>
         </div>

@@ -63,7 +63,7 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
 
           <div className="hidden max-w-4xl lg:block">
             <p className="mb-6 text-xs font-black uppercase tracking-[0.28em] text-[#f0ed7e]">
-              Power Petes / RiftBalance Pro
+              Power Petes
             </p>
 
             <MarketingTitle variant="desktop" />
@@ -110,7 +110,7 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
                   <p className="text-sm font-black uppercase tracking-[0.12em] text-[#f5f5f3]">
                     Power Petes
                   </p>
-                  <p className="text-xs text-[#8a8a85]">RiftBalance Pro</p>
+                  <p className="text-xs text-[#8a8a85]">Powers Petes</p>
                 </div>
               </div>
 

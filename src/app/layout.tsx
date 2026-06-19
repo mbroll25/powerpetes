@@ -11,7 +11,7 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: "RiftBalance Pro",
+  title: "Powers Petes",
   description:
     "Sistema profesional de matchmaking para partidas personalizadas de League of Legends.",
 };
