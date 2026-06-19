@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Swords, Users } from "lucide-react";
+import { YoutubeBackgroundVideo } from "@/components/landing/youtube-background-video";
 
 import DotField from "@/components/effects/dot-field";
 
@@ -27,15 +28,7 @@ const highlights = [
 export function AuthShell({ title, description, children }: AuthShellProps) {
   return (
     <main className="relative min-h-dvh overflow-x-hidden bg-[#151414] text-[#f5f5f3]">
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="absolute inset-0 h-full w-full object-cover opacity-55"
-      >
-        <source src="/videos/lol-background.mp4" type="video/mp4" />
-      </video>
+      <YoutubeBackgroundVideo videoId="P--2--5gbcE" className="opacity-55" />
 
       <div className="absolute inset-0 bg-[#151414]/58" />
       <div className="absolute inset-0 bg-linear-to-r from-[#151414]/96 via-[#151414]/78 to-[#151414]/92" />

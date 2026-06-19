@@ -7,6 +7,7 @@ import { AuthActions } from "@/components/auth/auth-actions";
 import DotField from "@/components/effects/dot-field";
 import { HeroTicker } from "@/components/landing/hero-ticker";
 import { SiteHeader } from "@/components/landing/site-header";
+import { YoutubeBackgroundVideo } from "@/components/landing/youtube-background-video";
 
 export function HeroSection() {
   const rootRef = useRef<HTMLElement | null>(null);
@@ -68,15 +69,18 @@ export function HeroSection() {
       ref={rootRef}
       className="relative flex h-dvh flex-col overflow-hidden bg-[#151414] text-[#f5f5f3]"
     >
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="absolute inset-0 h-full w-full object-cover opacity-75 sm:opacity-85 lg:opacity-100"
-      >
-        <source src="/videos/lol-background.mp4" type="video/mp4" />
-      </video>
+      <YoutubeBackgroundVideo
+        videoId="P--2--5gbcE"
+        className="opacity-75 sm:opacity-85 lg:opacity-100"
+      />
+
+      <div className="absolute inset-0 bg-[#151414]/50 sm:bg-[#151414]/45" />
+      <div className="absolute inset-0 bg-linear-to-r from-[#151414]/96 via-[#151414]/64 to-[#151414]/88" />
+
+      <YoutubeBackgroundVideo
+        videoId="P--2--5gbcE"
+        className="opacity-75 sm:opacity-85 lg:opacity-100"
+      />
 
       <div className="absolute inset-0 bg-[#151414]/50 sm:bg-[#151414]/45" />
       <div className="absolute inset-0 bg-linear-to-r from-[#151414]/96 via-[#151414]/64 to-[#151414]/88" />
