@@ -408,7 +408,7 @@ export function OnboardingForm() {
           description="El Riot ID ayuda a identificar correctamente al jugador."
         />
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_0.75fr_0.8fr]">
+        <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_0.75fr_1.1fr]">
           <TextInput
             label="Nick de LoL"
             value={form.lolNick}
@@ -826,18 +826,18 @@ function LockedRegionField() {
         Región / servidor
       </Label>
 
-      <div className="flex h-13 items-center justify-between gap-3 rounded-[0.5rem] border border-[#2a2929] bg-[#101010] px-4">
+      <div className="flex min-h-13 flex-col gap-3 rounded-[0.5rem] border border-[#2a2929] bg-[#101010] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-black text-[#f5f5f3]">
+          <p className="text-sm font-black leading-5 text-[#f5f5f3]">
             LAS — Latinoamérica Sur
           </p>
 
-          <p className="mt-0.5 text-xs text-[#8a8a85]">
+          <p className="mt-1 text-xs leading-5 text-[#8a8a85]">
             Región fija para la liga privada de PowerPetes.
           </p>
         </div>
 
-        <div className="inline-flex shrink-0 items-center rounded-full border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#75f0a0]">
+        <div className="inline-flex w-fit shrink-0 items-center rounded-full border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#75f0a0]">
           <ShieldCheck className="mr-1 size-3" />
           Bloqueada
         </div>
