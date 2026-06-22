@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ClipboardCheck, Loader2, X } from "lucide-react";
+import { useMemo, useState, type ChangeEvent } from "react";
+import { ClipboardCheck, FileImage, Loader2, Paperclip, X } from "lucide-react";
 
 import {
   ChampionSelector,
@@ -50,6 +50,7 @@ export type MatchClosurePayload = {
   redBans: ChampionDraft[];
   players: PlayerDraft[];
   notes: string;
+  screenshotFile: File | null;
 };
 
 type MatchClosureModalProps = {
@@ -119,6 +120,8 @@ export function MatchClosureModal({
   const [blueBans, setBlueBans] = useState(createEmptyBans);
   const [redBans, setRedBans] = useState(createEmptyBans);
   const [notes, setNotes] = useState("");
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotError, setScreenshotError] = useState("");
 
   const [players, setPlayers] = useState<PlayerDraft[]>(() => {
     return match.match_players.map((player) => ({
@@ -195,6 +198,35 @@ export function MatchClosureModal({
     });
   }
 
+  function handleScreenshotChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+
+    setScreenshotError("");
+
+    if (!file) {
+      setScreenshotFile(null);
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setScreenshotFile(null);
+      setScreenshotError("El comprobante debe ser una imagen.");
+      event.target.value = "";
+      return;
+    }
+
+    const maxSize = 8 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setScreenshotFile(null);
+      setScreenshotError("La imagen no puede superar los 8 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    setScreenshotFile(file);
+  }
+
   function handleSubmit() {
     if (!winnerTeam || !canSubmit) return;
 
@@ -206,6 +238,7 @@ export function MatchClosureModal({
       redBans,
       players,
       notes,
+      screenshotFile,
     });
   }
 
@@ -353,6 +386,61 @@ export function MatchClosureModal({
               placeholder="Ej: Resultado cargado manualmente, hubo remake parcial, dudas, comentarios..."
               className="min-h-24 rounded-[0.5rem] border-[#2a2929] bg-[#101010] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
             />
+          </div>
+
+          <div className="mb-5 rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <FileImage className="size-4 text-[#f0ed7e]" />
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                Prueba opcional
+              </p>
+            </div>
+
+            <p className="mb-4 text-sm leading-6 text-[#8a8a85]">
+              Podés adjuntar una captura del resultado ahora. No es obligatorio:
+              también se podrá agregar después desde el historial de partidas.
+            </p>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <label className="inline-flex h-11 w-fit cursor-pointer items-center justify-center rounded-[0.5rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-4 text-xs font-black uppercase tracking-[0.13em] text-[#f0ed7e] transition hover:bg-[#f0ed7e]/15">
+                <Paperclip className="mr-2 size-4" />
+                {screenshotFile ? "Cambiar imagen" : "Adjuntar imagen"}
+
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  disabled={isSaving}
+                  onChange={handleScreenshotChange}
+                  className="hidden"
+                />
+              </label>
+
+              {screenshotFile ? (
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-[0.5rem] border border-[#2a2929] bg-[#101010] px-3 py-2">
+                  <p className="truncate text-sm text-[#c9c9c4]">
+                    {screenshotFile.name}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScreenshotFile(null);
+                      setScreenshotError("");
+                    }}
+                    className="grid size-8 shrink-0 place-items-center rounded-full border border-[#2a2929] text-[#8a8a85] transition hover:border-red-400/35 hover:text-red-200"
+                    aria-label="Quitar imagen"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {screenshotError ? (
+              <p className="mt-3 rounded-[0.5rem] border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {screenshotError}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-3 border-t border-[#2a2929] pt-5 sm:flex-row sm:items-center sm:justify-between">

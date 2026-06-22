@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { MouseEvent } from "react";
+import type { ChangeEvent, MouseEvent } from "react";
 import Image from "next/image";
 import { gsap } from "gsap";
 import {
@@ -579,6 +579,45 @@ function ChampionMiniCard({
   );
 }
 
+function getEvidenceFileExtension(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension && ["png", "jpg", "jpeg", "webp"].includes(extension)) {
+    return extension;
+  }
+
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+
+  return "jpg";
+}
+
+function createEvidenceStoragePath({
+  tournamentId,
+  matchId,
+  userId,
+  file,
+}: {
+  tournamentId: string;
+  matchId: string;
+  userId: string;
+  file: File;
+}) {
+  const extension = getEvidenceFileExtension(file);
+  const uniqueId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  return `${tournamentId}/${matchId}/${userId}-${uniqueId}.${extension}`;
+}
+
+function matchHasScreenshot(match: HistoryMatchRecord) {
+  return match.match_result_submissions.some((evidence) => {
+    return Boolean(evidence.screenshot_path || evidence.screenshot_url);
+  });
+}
+
 export function FullMatchHistoryPanel({
   activeTournamentId,
 }: FullMatchHistoryPanelProps) {
@@ -603,6 +642,10 @@ export function FullMatchHistoryPanel({
   const [openingScreenshotId, setOpeningScreenshotId] = useState<string | null>(
     null,
   );
+
+  const [uploadingEvidenceMatchId, setUploadingEvidenceMatchId] = useState<
+    string | null
+  >(null);
 
   const loadMatches = useCallback(async () => {
     setMessage("");
@@ -753,6 +796,93 @@ match_bans (
     }
 
     setSelectedScreenshotUrl(data.signedUrl);
+  }
+
+  async function handleAttachEvidenceScreenshot(
+    match: HistoryMatchRecord,
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0] ?? null;
+
+    event.target.value = "";
+
+    if (!file) return;
+
+    setMessage("");
+
+    if (!file.type.startsWith("image/")) {
+      setMessage("El comprobante debe ser una imagen.");
+      return;
+    }
+
+    const maxSize = 8 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setMessage("La imagen no puede superar los 8 MB.");
+      return;
+    }
+
+    if (!activeTournamentId) {
+      setMessage("No se encontró el torneo.");
+      return;
+    }
+
+    setUploadingEvidenceMatchId(match.id);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setUploadingEvidenceMatchId(null);
+      setMessage("No se pudo identificar tu usuario.");
+      return;
+    }
+
+    const screenshotPath = createEvidenceStoragePath({
+      tournamentId: activeTournamentId,
+      matchId: match.id,
+      userId: user.id,
+      file,
+    });
+
+    const { error: uploadError } = await supabase.storage
+      .from("match-evidence")
+      .upload(screenshotPath, file, {
+        cacheControl: "3600",
+        contentType: file.type || "image/jpeg",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      setUploadingEvidenceMatchId(null);
+      setMessage(uploadError.message);
+      return;
+    }
+
+    const { error: evidenceError } = await supabase.rpc(
+      "attach_match_evidence_screenshot",
+      {
+        p_match_id: match.id,
+        p_screenshot_path: screenshotPath,
+        p_notes:
+          "Imagen agregada como comprobante desde el historial de partidas.",
+        p_screenshot_expires_at: null,
+      },
+    );
+
+    setUploadingEvidenceMatchId(null);
+
+    if (evidenceError) {
+      setMessage(evidenceError.message);
+      return;
+    }
+
+    setMessage(
+      `Prueba agregada correctamente a la partida #${match.match_number}.`,
+    );
+
+    await loadMatches();
   }
 
   if (!activeTournamentId) {
@@ -1061,6 +1191,44 @@ match_bans (
                             </div>
                           </div>
                         ) : null}
+                        <div className="mt-4 rounded-[0.75rem] border border-[#2a2929] bg-[#101010]/70 p-4">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Paperclip className="size-4 text-[#f0ed7e]" />
+                            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                              Prueba del resultado
+                            </p>
+                          </div>
+
+                          <p className="mb-4 text-sm leading-6 text-[#8a8a85]">
+                            {matchHasScreenshot(match)
+                              ? "Esta partida ya tiene una prueba adjunta. Podés agregar otra imagen si necesitás reforzar el comprobante."
+                              : "Esta partida todavía no tiene imagen de prueba. Podés adjuntar una captura del resultado."}
+                          </p>
+
+                          <label className="inline-flex h-10 w-fit cursor-pointer items-center justify-center rounded-[0.5rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-4 text-xs font-black uppercase tracking-[0.13em] text-[#f0ed7e] transition hover:bg-[#f0ed7e]/15">
+                            {uploadingEvidenceMatchId === match.id ? (
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                              <Paperclip className="mr-2 size-4" />
+                            )}
+
+                            {uploadingEvidenceMatchId === match.id
+                              ? "Subiendo..."
+                              : matchHasScreenshot(match)
+                                ? "Agregar otra prueba"
+                                : "Agregar prueba"}
+
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              disabled={uploadingEvidenceMatchId === match.id}
+                              onChange={(event) =>
+                                handleAttachEvidenceScreenshot(match, event)
+                              }
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
                       </div>
                     ) : null}
                   </article>

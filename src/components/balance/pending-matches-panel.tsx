@@ -155,6 +155,39 @@ function getArgentinaDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function getEvidenceFileExtension(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension && ["png", "jpg", "jpeg", "webp"].includes(extension)) {
+    return extension;
+  }
+
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+
+  return "jpg";
+}
+
+function createEvidenceStoragePath({
+  tournamentId,
+  matchId,
+  userId,
+  file,
+}: {
+  tournamentId: string;
+  matchId: string;
+  userId: string;
+  file: File;
+}) {
+  const extension = getEvidenceFileExtension(file);
+  const uniqueId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  return `${tournamentId}/${matchId}/${userId}-${uniqueId}.${extension}`;
+}
+
 export function PendingMatchesPanel({
   activeTournamentId,
   isAdmin,
@@ -442,6 +475,69 @@ export function PendingMatchesPanel({
     );
   }
 
+  async function uploadMatchEvidenceScreenshot({
+    matchId,
+    screenshotFile,
+    notes,
+  }: {
+    matchId: string;
+    screenshotFile: File;
+    notes: string;
+  }) {
+    if (!activeTournamentId) {
+      throw new Error("No se encontró el torneo activo.");
+    }
+
+    let userId = currentUserId;
+
+    if (!userId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      userId = user?.id ?? null;
+    }
+
+    if (!userId) {
+      throw new Error("No se pudo identificar tu usuario.");
+    }
+
+    const screenshotPath = createEvidenceStoragePath({
+      tournamentId: activeTournamentId,
+      matchId,
+      userId,
+      file: screenshotFile,
+    });
+
+    const { error: uploadError } = await supabase.storage
+      .from("match-evidence")
+      .upload(screenshotPath, screenshotFile, {
+        cacheControl: "3600",
+        contentType: screenshotFile.type || "image/jpeg",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { error: evidenceError } = await supabase.rpc(
+      "attach_match_evidence_screenshot",
+      {
+        p_match_id: matchId,
+        p_screenshot_path: screenshotPath,
+        p_notes:
+          notes.trim() ||
+          "Imagen adjuntada como comprobante durante el cierre manual.",
+        p_screenshot_expires_at: null,
+      },
+    );
+
+    if (evidenceError) {
+      throw evidenceError;
+    }
+  }
+
   async function handleSubmitMatchClosure(payload: MatchClosurePayload) {
     setMessage("");
     setClosingMatchId(payload.matchId);
@@ -456,13 +552,31 @@ export function PendingMatchesPanel({
       p_notes: payload.notes || null,
     });
 
-    setClosingMatchId(null);
-
     if (error) {
+      setClosingMatchId(null);
       setMessage(error.message);
       return;
     }
 
+    let screenshotUploaded = false;
+    let screenshotUploadFailed = false;
+
+    if (payload.screenshotFile) {
+      try {
+        await uploadMatchEvidenceScreenshot({
+          matchId: payload.matchId,
+          screenshotFile: payload.screenshotFile,
+          notes: payload.notes,
+        });
+
+        screenshotUploaded = true;
+      } catch (uploadError) {
+        screenshotUploadFailed = true;
+        console.error("No se pudo adjuntar la prueba:", uploadError);
+      }
+    }
+
+    setClosingMatchId(null);
     setClosingMatch(null);
 
     setMatches((current) => {
@@ -471,11 +585,20 @@ export function PendingMatchesPanel({
       );
     });
 
-    setMessage(
-      `Partida cerrada correctamente. Ganó ${
-        payload.winnerTeam === "blue" ? "Equipo Azul" : "Equipo Rojo"
-      }.`,
-    );
+    const winnerLabel =
+      payload.winnerTeam === "blue" ? "Equipo Azul" : "Equipo Rojo";
+
+    if (screenshotUploadFailed) {
+      setMessage(
+        `Partida cerrada correctamente. Ganó ${winnerLabel}. La imagen no se pudo adjuntar, pero podrás agregarla después desde el historial de partidas.`,
+      );
+    } else if (screenshotUploaded) {
+      setMessage(
+        `Partida cerrada correctamente. Ganó ${winnerLabel}. La prueba quedó adjuntada.`,
+      );
+    } else {
+      setMessage(`Partida cerrada correctamente. Ganó ${winnerLabel}.`);
+    }
 
     window.dispatchEvent(new Event("riftbalance:completed-matches-updated"));
 
