@@ -2,19 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  FileSearch,
-  Gamepad2,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
   Loader2,
   ShieldCheck,
-  Swords,
   Trash2,
-  Trophy,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { ClientPortal } from "@/components/ui/client-portal";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
@@ -34,6 +32,8 @@ type PendingMatchesPanelProps = {
 type MatchPlayerProfile = {
   lol_nick: string | null;
   lol_tagline: string | null;
+  primary_role: string | null;
+  secondary_role: string | null;
 };
 
 type MatchPlayerRecord = {
@@ -55,8 +55,9 @@ type MatchEvidenceRecord = {
   riot_game_id: string | null;
   riot_match_id: string | null;
   suggested_winner: "blue" | "red" | null;
-  riot_payload: RiotValidatedMatch | null;
+  riot_payload: unknown | null;
   notes: string | null;
+  screenshot_path: string | null;
   screenshot_url: string | null;
   screenshot_expires_at: string | null;
   created_at: string;
@@ -77,46 +78,6 @@ type PendingMatchRecord = {
   match_result_submissions: MatchEvidenceRecord[];
   match_finished_at: string | null;
   match_finished_by: string | null;
-};
-
-type EvidenceDraft = {
-  identifier: string;
-  notes: string;
-};
-
-type RiotValidatedMatch = {
-  riotGameId: string;
-  riotMatchId: string;
-  gameMode: string;
-  gameType: string;
-  gameDuration: number;
-  suggestedWinner: "blue" | "red" | null;
-  teams: {
-    blue: Array<{
-      name: string;
-      championName: string;
-      kills: number;
-      deaths: number;
-      assists: number;
-      damage: number;
-      gold: number;
-      cs: number;
-      position: string;
-      win: boolean;
-    }>;
-    red: Array<{
-      name: string;
-      championName: string;
-      kills: number;
-      deaths: number;
-      assists: number;
-      damage: number;
-      gold: number;
-      cs: number;
-      position: string;
-      win: boolean;
-    }>;
-  };
 };
 
 function formatRole(role: string) {
@@ -149,15 +110,6 @@ function sortByRole(players: MatchPlayerRecord[]) {
   });
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function getSecondsRemaining(endsAt: string | null, now: number) {
   if (!endsAt) return 0;
 
@@ -179,6 +131,15 @@ function formatTeamName(team: "blue" | "red") {
   return team === "blue" ? "Equipo Azul" : "Equipo Rojo";
 }
 
+function isComfortableAssignedRole(player: MatchPlayerRecord) {
+  const profile = player.profiles;
+
+  return (
+    profile?.primary_role === player.assigned_role ||
+    profile?.secondary_role === player.assigned_role
+  );
+}
+
 function getArgentinaDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Argentina/Buenos_Aires",
@@ -192,50 +153,6 @@ function getArgentinaDateKey(date = new Date()) {
   const day = parts.find((part) => part.type === "day")?.value ?? "01";
 
   return `${year}-${month}-${day}`;
-}
-
-function getPendingEvidence(match: PendingMatchRecord) {
-  return (
-    match.match_result_submissions
-      ?.filter((evidence) => evidence.status === "pending")
-      .sort((a, b) => {
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      })[0] ?? null
-  );
-}
-
-function normalizeGameIdentifier(value: string) {
-  const cleanedValue = value.trim().toUpperCase().replaceAll("-", "_");
-
-  if (!cleanedValue) {
-    return {
-      riotGameId: null,
-      riotMatchId: null,
-    };
-  }
-
-  if (/^\d+$/.test(cleanedValue)) {
-    return {
-      riotGameId: cleanedValue,
-      riotMatchId: `LA2_${cleanedValue}`,
-    };
-  }
-
-  const matchIdParts = cleanedValue.match(/^([A-Z0-9]+)_(\d+)$/);
-
-  if (matchIdParts) {
-    return {
-      riotGameId: matchIdParts[2] ?? null,
-      riotMatchId: cleanedValue,
-    };
-  }
-
-  return {
-    riotGameId: null,
-    riotMatchId: cleanedValue,
-  };
 }
 
 export function PendingMatchesPanel({
@@ -258,26 +175,11 @@ export function PendingMatchesPanel({
   );
   const [closingMatchId, setClosingMatchId] = useState<string | null>(null);
   const [finishingMatchId, setFinishingMatchId] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  const [draftsByMatchId, setDraftsByMatchId] = useState<
-    Record<string, EvidenceDraft>
-  >({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(
-    null,
-  );
-  const [completingMatchId, setCompletingMatchId] = useState<string | null>(
-    null,
-  );
   const [cancellingMatchId, setCancellingMatchId] = useState<string | null>(
     null,
   );
-  const [validatingMatchId, setValidatingMatchId] = useState<string | null>(
-    null,
-  );
-  const [validatedMatchesByMatchId, setValidatedMatchesByMatchId] = useState<
-    Record<string, RiotValidatedMatch>
-  >({});
+  const [now, setNow] = useState(() => Date.now());
+  const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -337,9 +239,11 @@ export function PendingMatchesPanel({
           vale_used,
           vale_used_at,
         profiles (
-          lol_nick,
-          lol_tagline
-  )
+  lol_nick,
+  lol_tagline,
+  primary_role,
+  secondary_role
+)
 ),
         match_result_submissions (
   id,
@@ -351,6 +255,7 @@ export function PendingMatchesPanel({
   suggested_winner,
   riot_payload,
   notes,
+  screenshot_path,
   screenshot_url,
   screenshot_expires_at,
   created_at
@@ -395,14 +300,22 @@ export function PendingMatchesPanel({
   }, [currentUserId, supabase]);
 
   useEffect(() => {
-    loadDailyValeStatus();
+    const timeoutId = window.setTimeout(() => {
+      void loadDailyValeStatus();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [loadDailyValeStatus]);
 
   useEffect(() => {
-    loadPendingMatches();
+    const timeoutId = window.setTimeout(() => {
+      void loadPendingMatches();
+    }, 0);
 
     function handlePendingMatchesUpdated() {
-      loadPendingMatches();
+      void loadPendingMatches();
     }
 
     window.addEventListener(
@@ -412,6 +325,8 @@ export function PendingMatchesPanel({
 
     if (!activeTournamentId) {
       return () => {
+        window.clearTimeout(timeoutId);
+
         window.removeEventListener(
           "riftbalance:pending-matches-updated",
           handlePendingMatchesUpdated,
@@ -430,7 +345,7 @@ export function PendingMatchesPanel({
           filter: `tournament_id=eq.${activeTournamentId}`,
         },
         () => {
-          loadPendingMatches();
+          void loadPendingMatches();
         },
       )
       .on(
@@ -441,7 +356,7 @@ export function PendingMatchesPanel({
           table: "match_players",
         },
         () => {
-          loadPendingMatches();
+          void loadPendingMatches();
         },
       )
       .on(
@@ -452,7 +367,7 @@ export function PendingMatchesPanel({
           table: "daily_vale_usages",
         },
         () => {
-          loadDailyValeStatus();
+          void loadDailyValeStatus();
         },
       )
       .subscribe((status, error) => {
@@ -462,6 +377,8 @@ export function PendingMatchesPanel({
       });
 
     return () => {
+      window.clearTimeout(timeoutId);
+
       window.removeEventListener(
         "riftbalance:pending-matches-updated",
         handlePendingMatchesUpdated,
@@ -470,84 +387,6 @@ export function PendingMatchesPanel({
       void supabase.removeChannel(channel);
     };
   }, [activeTournamentId, loadPendingMatches, loadDailyValeStatus, supabase]);
-
-  function updateDraft(matchId: string, patch: Partial<EvidenceDraft>) {
-    setDraftsByMatchId((current) => {
-      const currentDraft = current[matchId] ?? {
-        identifier: "",
-        notes: "",
-      };
-
-      return {
-        ...current,
-        [matchId]: {
-          ...currentDraft,
-          ...patch,
-        },
-      };
-    });
-  }
-
-  async function handleSubmitEvidence(matchId: string) {
-    const draft = draftsByMatchId[matchId] ?? {
-      identifier: "",
-      notes: "",
-    };
-
-    const normalizedIds = normalizeGameIdentifier(draft.identifier);
-    const notes = draft.notes.trim();
-
-    const validatedMatch = validatedMatchesByMatchId[matchId] ?? null;
-
-    if (!normalizedIds.riotGameId && !normalizedIds.riotMatchId && !notes) {
-      setMessage("Cargá un ID del juego o una nota para enviar evidencia.");
-      return;
-    }
-
-    setMessage("");
-    setSubmittingMatchId(matchId);
-
-    const source =
-      normalizedIds.riotGameId || normalizedIds.riotMatchId
-        ? "riot_api"
-        : "manual";
-
-    const { error } = await supabase.rpc("submit_match_evidence", {
-      p_match_id: matchId,
-      p_source: validatedMatch ? "riot_api" : source,
-      p_riot_game_id: validatedMatch?.riotGameId ?? normalizedIds.riotGameId,
-      p_riot_match_id: validatedMatch?.riotMatchId ?? normalizedIds.riotMatchId,
-      p_notes:
-        notes ||
-        (validatedMatch
-          ? `Validado con Riot. Ganador sugerido: ${
-              validatedMatch.suggestedWinner === "blue"
-                ? "Equipo Azul"
-                : validatedMatch.suggestedWinner === "red"
-                  ? "Equipo Rojo"
-                  : "No detectado"
-            }.`
-          : null),
-      p_suggested_winner: validatedMatch?.suggestedWinner ?? null,
-      p_riot_payload: validatedMatch ?? null,
-    });
-
-    setSubmittingMatchId(null);
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    setDraftsByMatchId((current) => {
-      const next = { ...current };
-      delete next[matchId];
-      return next;
-    });
-
-    await loadPendingMatches();
-    setMessage("Evidencia enviada. Queda pendiente de revisión admin.");
-  }
 
   async function handleUseVale(matchId: string) {
     setMessage("");
@@ -601,56 +440,6 @@ export function PendingMatchesPanel({
     setMessage(
       "Vale diario activado. Si perdés esta partida, no perderás puntos visibles.",
     );
-  }
-
-  async function handleValidateWithRiot(matchId: string) {
-    const draft = draftsByMatchId[matchId] ?? {
-      identifier: "",
-      notes: "",
-    };
-
-    if (!draft.identifier.trim()) {
-      setMessage("Ingresá un ID del juego o matchId para validar con Riot.");
-      return;
-    }
-
-    setMessage("");
-    setValidatingMatchId(matchId);
-
-    const response = await fetch("/api/riot/match", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        identifier: draft.identifier,
-      }),
-    });
-
-    const data = await response.json();
-
-    setValidatingMatchId(null);
-
-    if (!response.ok) {
-      setMessage(data.error ?? "No se pudo validar la partida con Riot.");
-      return;
-    }
-
-    setValidatedMatchesByMatchId((current) => {
-      return {
-        ...current,
-        [matchId]: data as RiotValidatedMatch,
-      };
-    });
-
-    const winnerText =
-      data.suggestedWinner === "blue"
-        ? "Ganador detectado: Equipo Azul."
-        : data.suggestedWinner === "red"
-          ? "Ganador detectado: Equipo Rojo."
-          : "No se pudo detectar ganador.";
-
-    setMessage(`Partida validada con Riot. ${winnerText}`);
   }
 
   async function handleSubmitMatchClosure(payload: MatchClosurePayload) {
@@ -777,567 +566,93 @@ export function PendingMatchesPanel({
 
   const showInitialLoading = isLoading && matches.length === 0;
 
+  const activeFloatingMatch = matches[0] ?? null;
+
+  const activeFloatingBluePlayers = activeFloatingMatch
+    ? sortByRole(
+        activeFloatingMatch.match_players.filter((player) => {
+          return player.team === "blue";
+        }),
+      )
+    : [];
+
+  const activeFloatingRedPlayers = activeFloatingMatch
+    ? sortByRole(
+        activeFloatingMatch.match_players.filter((player) => {
+          return player.team === "red";
+        }),
+      )
+    : [];
+
+  const activeFloatingCurrentPlayer =
+    activeFloatingMatch && currentUserId
+      ? (activeFloatingMatch.match_players.find((player) => {
+          return player.user_id === currentUserId;
+        }) ?? null)
+      : null;
+
+  const activeFloatingSecondsRemaining = getSecondsRemaining(
+    activeFloatingMatch?.vale_window_ends_at ?? null,
+    now,
+  );
+
+  const activeFloatingValeWindowOpen = activeFloatingSecondsRemaining > 0;
+
+  const activeFloatingValeUsedCount =
+    activeFloatingMatch?.match_players.filter((player) => {
+      return player.vale_used;
+    }).length ?? 0;
+
   if (!activeTournamentId) {
     return null;
   }
 
   return (
-    <section
-      data-dashboard-anim="panel"
-      className="mt-8 overflow-hidden rounded-[0.75rem] border border-[#2a2929] bg-[#101010]/92 shadow-[0_1rem_3rem_rgba(0,0,0,0.22)]"
-    >
-      <div className="relative border-b border-[#2a2929] p-5 sm:p-6">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(117,240,160,0.08),transparent_30%)]" />
-
-        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2">
-              <Trophy className="size-4 text-[#f0ed7e]" />
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
-                Resultados pendientes
-              </p>
+    <>
+      {showInitialLoading ? (
+        <ClientPortal>
+          <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+            <div className="pointer-events-auto rounded-4xl border border-[#2a2929] bg-[#101010]/92 px-4 py-3 text-sm font-black text-[#f5f5f3] shadow-[0_1rem_3rem_rgba(0,0,0,0.45)] backdrop-blur-xl">
+              Cargando partida en curso...
             </div>
+          </div>
+        </ClientPortal>
+      ) : null}
 
-            <h2 className="text-2xl font-black text-[#f5f5f3]">
-              Partidas generadas
-            </h2>
+      {activeFloatingMatch ? (
+        <FloatingCurrentMatchPanel
+          match={activeFloatingMatch}
+          bluePlayers={activeFloatingBluePlayers}
+          redPlayers={activeFloatingRedPlayers}
+          currentMatchPlayer={activeFloatingCurrentPlayer}
+          dailyValeUsage={dailyValeUsage}
+          isAdmin={isAdmin}
+          valeWindowOpen={activeFloatingValeWindowOpen}
+          secondsRemaining={activeFloatingSecondsRemaining}
+          valeUsedCount={activeFloatingValeUsedCount}
+          isUsingVale={usingValeMatchId === activeFloatingMatch.id}
+          currentPlayerValeUsed={Boolean(
+            activeFloatingCurrentPlayer?.vale_used,
+          )}
+          finishingMatchId={finishingMatchId}
+          cancellingMatchId={cancellingMatchId}
+          closingMatchId={closingMatchId}
+          onUseVale={() => handleUseVale(activeFloatingMatch.id)}
+          onMarkFinished={() => handleMarkMatchFinished(activeFloatingMatch)}
+          onCancel={() => handleCancelPendingMatch(activeFloatingMatch)}
+          onOpenClosure={() => setClosingMatch(activeFloatingMatch)}
+        />
+      ) : null}
 
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#8a8a85]">
-              Los jugadores pueden cargar evidencia. El admin define quién ganó
-              y recién ahí se actualizan la tabla y el rating.
+      {message ? (
+        <ClientPortal>
+          <div className="pointer-events-none fixed inset-x-0 top-24 z-50 flex justify-center px-4">
+            <p className="pointer-events-auto max-w-2xl rounded-[0.75rem] border border-[#f0ed7e]/25 bg-[#101010]/94 px-4 py-3 text-sm leading-6 text-[#f5f5f3] shadow-[0_1rem_3rem_rgba(0,0,0,0.45)] backdrop-blur-xl">
+              {message}
             </p>
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <div
-              className={cn(
-                "rounded-4xl border px-4 py-3",
-                dailyValeUsage
-                  ? "border-[#2a2929] bg-[#151414]/80"
-                  : "border-[#75f0a0]/25 bg-[#75f0a0]/10",
-              )}
-            >
-              <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
-                Vale diario
-              </p>
-              <p
-                className={cn(
-                  "mt-1 text-xl font-black",
-                  dailyValeUsage ? "text-[#f5f5f3]" : "text-[#75f0a0]",
-                )}
-              >
-                {dailyValeUsage ? "Usado" : "Disponible"}
-              </p>
-            </div>
-
-            <div className="rounded-4xl border border-[#2a2929] bg-[#151414]/80 px-4 py-3">
-              <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
-                Pendientes
-              </p>
-              <p className="mt-1 text-xl font-black text-[#f5f5f3]">
-                {matches.length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-5 sm:p-6">
-        {showInitialLoading ? (
-          <p className="text-sm text-[#8a8a85]">Cargando partidas...</p>
-        ) : matches.length > 0 ? (
-          <div className="grid gap-4">
-            {matches.map((match) => {
-              const bluePlayers = sortByRole(
-                match.match_players.filter((player) => player.team === "blue"),
-              );
-
-              const redPlayers = sortByRole(
-                match.match_players.filter((player) => player.team === "red"),
-              );
-
-              const pendingEvidence = getPendingEvidence(match);
-              const draft = draftsByMatchId[match.id] ?? {
-                identifier: "",
-                notes: "",
-              };
-
-              const validatedMatch =
-                validatedMatchesByMatchId[match.id] ?? null;
-
-              const currentMatchPlayer = currentUserId
-                ? (match.match_players.find(
-                    (player) => player.user_id === currentUserId,
-                  ) ?? null)
-                : null;
-
-              const secondsRemaining = getSecondsRemaining(
-                match.vale_window_ends_at,
-                now,
-              );
-
-              const valeWindowOpen = secondsRemaining > 0;
-              const currentPlayerValeUsed = Boolean(
-                currentMatchPlayer?.vale_used,
-              );
-              const valeUsedCount = match.match_players.filter((player) => {
-                return player.vale_used;
-              }).length;
-
-              return (
-                <article
-                  key={match.id}
-                  className="rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4"
-                >
-                  <div className="mb-4 flex flex-col gap-3 border-b border-[#2a2929] pb-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
-                        Partida #{match.match_number}
-                      </p>
-
-                      <h3 className="mt-1 text-xl font-black text-[#f5f5f3]">
-                        Equipo Azul vs Equipo Rojo
-                      </h3>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <MiniMatchStat
-                        label="Balance"
-                        value={`${Math.round(Number(match.balance_score ?? 0))}%`}
-                      />
-                      <MiniMatchStat
-                        label="Azul"
-                        value={`${Math.round(
-                          Number(match.blue_win_probability ?? 50),
-                        )}%`}
-                      />
-                      <MiniMatchStat
-                        label="Rojo"
-                        value={`${Math.round(
-                          Number(match.red_win_probability ?? 50),
-                        )}%`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    <PendingTeamCard
-                      side="blue"
-                      title="Equipo Azul"
-                      players={bluePlayers}
-                    />
-
-                    <PendingTeamCard
-                      side="red"
-                      title="Equipo Rojo"
-                      players={redPlayers}
-                    />
-                  </div>
-
-                  <div className="mt-4 rounded-[0.75rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/8 p-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
-                          Ventana de vale diario
-                        </p>
-
-                        <h4 className="mt-2 text-xl font-black text-[#f5f5f3]">
-                          {valeWindowOpen
-                            ? `Cierra en ${formatCountdown(secondsRemaining)}`
-                            : "Ventana cerrada"}
-                        </h4>
-
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#8a8a85]">
-                          Cada jugador tiene 60 segundos para activar su vale.
-                          Si pierde con vale activo, no pierde puntos visibles,
-                          pero la partida sigue contando para estadísticas y
-                          matchmaking.
-                        </p>
-                      </div>
-
-                      <div className="rounded-[0.6rem] border border-[#2a2929] bg-[#101010]/80 px-4 py-3 text-right">
-                        <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
-                          Vales usados
-                        </p>
-                        <p className="mt-1 text-xl font-black text-[#f5f5f3]">
-                          {valeUsedCount}/10
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 border-t border-[#2a2929] pt-4">
-                      {currentMatchPlayer ? (
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                          <div>
-                            <p className="text-sm font-black text-[#f5f5f3]">
-                              Tu equipo:{" "}
-                              {formatTeamName(currentMatchPlayer.team)}
-                            </p>
-
-                            <p className="mt-1 text-xs text-[#8a8a85]">
-                              Rol asignado:{" "}
-                              {formatRole(currentMatchPlayer.assigned_role)}
-                            </p>
-                          </div>
-
-                          <Button
-                            type="button"
-                            disabled={
-                              !valeWindowOpen ||
-                              currentPlayerValeUsed ||
-                              usingValeMatchId === match.id
-                            }
-                            onClick={() => handleUseVale(match.id)}
-                            className="h-11 rounded-[0.5rem] border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-5 text-xs font-black uppercase tracking-[0.14em] text-[#75f0a0] hover:bg-[#75f0a0]/15 disabled:cursor-not-allowed disabled:opacity-45"
-                          >
-                            {usingValeMatchId === match.id ? (
-                              <Loader2 className="mr-2 size-4 animate-spin" />
-                            ) : (
-                              <ShieldCheck className="mr-2 size-4" />
-                            )}
-
-                            {currentPlayerValeUsed
-                              ? "Vale activado"
-                              : valeWindowOpen
-                                ? "Usar vale diario"
-                                : "Ventana cerrada"}
-                          </Button>
-                        </div>
-                      ) : (
-                        <p className="text-sm leading-6 text-[#8a8a85]">
-                          No participás en esta partida. Solo los 10 jugadores
-                          asignados pueden usar vale.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {!match.match_finished_at ? (
-                    <div className="mt-4 rounded-[0.75rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 p-5">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
-                            Partida en curso
-                          </p>
-
-                          <h4 className="mt-2 text-2xl font-black text-[#f5f5f3]">
-                            Esperando finalización
-                          </h4>
-
-                          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#8a8a85]">
-                            Cuando la partida termine, el administrador debe
-                            marcarla como finalizada. Recién después se
-                            habilitará la carga de evidencia y el cierre
-                            oficial.
-                          </p>
-                        </div>
-
-                        {isAdmin ? (
-                          <div className="grid gap-3 sm:min-w-64">
-                            <Button
-                              type="button"
-                              disabled={
-                                finishingMatchId === match.id ||
-                                Boolean(cancellingMatchId) ||
-                                Boolean(closingMatchId)
-                              }
-                              onClick={() => handleMarkMatchFinished(match)}
-                              className="h-12 rounded-[0.5rem] bg-[#f0ed7e] px-5 text-xs font-black uppercase tracking-[0.14em] text-[#151414] hover:bg-[#d8d46d]"
-                            >
-                              {finishingMatchId === match.id ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
-                              ) : (
-                                <ShieldCheck className="mr-2 size-4" />
-                              )}
-                              Finalizó la partida
-                            </Button>
-
-                            <Button
-                              type="button"
-                              disabled={
-                                finishingMatchId === match.id ||
-                                Boolean(cancellingMatchId) ||
-                                Boolean(closingMatchId)
-                              }
-                              onClick={() => handleCancelPendingMatch(match)}
-                              className="h-12 rounded-[0.5rem] border border-red-400/25 bg-transparent px-5 text-xs font-black uppercase tracking-[0.14em] text-red-200 hover:bg-red-400/10"
-                            >
-                              {cancellingMatchId === match.id ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="mr-2 size-4" />
-                              )}
-                              Cancelar pendiente
-                            </Button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_22rem]">
-                      <div className="rounded-4xl border border-[#2a2929] bg-[#101010]/70 p-4">
-                        <div className="mb-3 flex items-center gap-2">
-                          <FileSearch className="size-4 text-[#75f0a0]" />
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#75f0a0]">
-                            Evidencia
-                          </p>
-                        </div>
-
-                        {pendingEvidence ? (
-                          <div className="rounded-3xl border border-[#75f0a0]/25 bg-[#75f0a0]/10 p-4">
-                            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#75f0a0]">
-                              Evidencia pendiente
-                            </p>
-
-                            <div className="mt-3 grid gap-2 text-sm leading-6 text-[#c9c9c4]">
-                              {pendingEvidence.riot_game_id ? (
-                                <p>
-                                  ID del juego:{" "}
-                                  <span className="font-black text-[#f5f5f3]">
-                                    {pendingEvidence.riot_game_id}
-                                  </span>
-                                </p>
-                              ) : null}
-
-                              {pendingEvidence.riot_match_id ? (
-                                <p>
-                                  Match ID:{" "}
-                                  <span className="font-black text-[#f5f5f3]">
-                                    {pendingEvidence.riot_match_id}
-                                  </span>
-                                </p>
-                              ) : null}
-
-                              {pendingEvidence.suggested_winner ? (
-                                <p>
-                                  Ganador sugerido por Riot:{" "}
-                                  <span className="font-black text-[#f5f5f3]">
-                                    {pendingEvidence.suggested_winner === "blue"
-                                      ? "Equipo Azul"
-                                      : "Equipo Rojo"}
-                                  </span>
-                                </p>
-                              ) : null}
-
-                              {pendingEvidence.notes ? (
-                                <p>{pendingEvidence.notes}</p>
-                              ) : null}
-
-                              <p className="text-xs text-[#8a8a85]">
-                                Enviado:{" "}
-                                {formatDateTime(pendingEvidence.created_at)}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid gap-3">
-                            <Input
-                              value={draft.identifier}
-                              onChange={(event) =>
-                                updateDraft(match.id, {
-                                  identifier: event.target.value,
-                                })
-                              }
-                              placeholder="ID del juego o matchId. Ej: 1602703298"
-                              className="h-12 rounded-[0.5rem] border-[#2a2929] bg-[#151414] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
-                            />
-
-                            <Button
-                              type="button"
-                              disabled={
-                                validatingMatchId === match.id ||
-                                !draft.identifier.trim()
-                              }
-                              onClick={() => handleValidateWithRiot(match.id)}
-                              className="h-11 rounded-[0.5rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e] hover:bg-[#f0ed7e]/15"
-                            >
-                              {validatingMatchId === match.id ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
-                              ) : (
-                                <Gamepad2 className="mr-2 size-4" />
-                              )}
-                              Validar con Riot
-                            </Button>
-
-                            {validatedMatch ? (
-                              <div className="rounded-4xl border border-[#75f0a0]/25 bg-[#75f0a0]/10 p-4">
-                                <p className="text-xs font-black uppercase tracking-[0.12em] text-[#75f0a0]">
-                                  Riot encontró la partida
-                                </p>
-
-                                <p className="mt-2 text-sm leading-6 text-[#c9c9c4]">
-                                  Match ID:{" "}
-                                  <span className="font-black text-[#f5f5f3]">
-                                    {validatedMatch.riotMatchId}
-                                  </span>
-                                </p>
-
-                                <p className="text-sm leading-6 text-[#c9c9c4]">
-                                  Duración:{" "}
-                                  <span className="font-black text-[#f5f5f3]">
-                                    {Math.floor(
-                                      validatedMatch.gameDuration / 60,
-                                    )}
-                                    m {validatedMatch.gameDuration % 60}s
-                                  </span>
-                                </p>
-
-                                <p className="text-sm leading-6 text-[#c9c9c4]">
-                                  Ganador sugerido:{" "}
-                                  <span className="font-black text-[#f5f5f3]">
-                                    {validatedMatch.suggestedWinner === "blue"
-                                      ? "Equipo Azul"
-                                      : validatedMatch.suggestedWinner === "red"
-                                        ? "Equipo Rojo"
-                                        : "No detectado"}
-                                  </span>
-                                </p>
-
-                                <div className="mt-3 grid gap-2">
-                                  {[
-                                    ...validatedMatch.teams.blue,
-                                    ...validatedMatch.teams.red,
-                                  ]
-                                    .slice(0, 10)
-                                    .map((player) => (
-                                      <div
-                                        key={`${player.name}-${player.championName}`}
-                                        className="rounded-[0.5rem] border border-[#2a2929] bg-[#101010]/70 px-3 py-2"
-                                      >
-                                        <p className="text-sm font-black text-[#f5f5f3]">
-                                          {player.name} · {player.championName}
-                                        </p>
-                                        <p className="mt-1 text-xs text-[#8a8a85]">
-                                          {player.kills}/{player.deaths}/
-                                          {player.assists} · CS {player.cs} ·
-                                          Daño {player.damage}
-                                        </p>
-                                      </div>
-                                    ))}
-                                </div>
-                              </div>
-                            ) : null}
-
-                            <Textarea
-                              value={draft.notes}
-                              onChange={(event) =>
-                                updateDraft(match.id, {
-                                  notes: event.target.value,
-                                })
-                              }
-                              placeholder="Nota opcional para el admin..."
-                              className="min-h-24 rounded-[0.5rem] border-[#2a2929] bg-[#151414] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
-                            />
-
-                            <Button
-                              type="button"
-                              disabled={submittingMatchId === match.id}
-                              onClick={() => handleSubmitEvidence(match.id)}
-                              className="h-11 rounded-[0.5rem] border border-[#75f0a0]/25 bg-[#75f0a0]/10 text-xs font-black uppercase tracking-[0.14em] text-[#75f0a0] hover:bg-[#75f0a0]/15"
-                            >
-                              {submittingMatchId === match.id ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
-                              ) : (
-                                <Gamepad2 className="mr-2 size-4" />
-                              )}
-                              Enviar evidencia
-                            </Button>
-
-                            <p className="text-xs leading-5 text-[#8a8a85]">
-                              Las capturas futuras serán temporales y se
-                              borrarán automáticamente luego de 7 días.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="rounded-4xl border border-[#2a2929] bg-[#101010]/70 p-4">
-                        <div className="mb-3 flex items-center gap-2">
-                          <ShieldCheck className="size-4 text-[#f0ed7e]" />
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
-                            Decisión admin
-                          </p>
-                        </div>
-
-                        {isAdmin ? (
-                          <div>
-                            <p className="mb-3 text-sm leading-6 text-[#8a8a85]">
-                              Revisá la evidencia y elegí el ganador oficial.
-                            </p>
-
-                            <div className="grid gap-3">
-                              <Button
-                                type="button"
-                                disabled={
-                                  Boolean(cancellingMatchId) ||
-                                  closingMatchId === match.id
-                                }
-                                onClick={() => setClosingMatch(match)}
-                                className="h-12 rounded-[0.5rem] bg-[#f0ed7e] px-5 text-xs font-black uppercase tracking-[0.14em] text-[#151414] hover:bg-[#d8d46d]"
-                              >
-                                {closingMatchId === match.id ? (
-                                  <Loader2 className="mr-2 size-4 animate-spin" />
-                                ) : (
-                                  <ShieldCheck className="mr-2 size-4" />
-                                )}
-                                Cargar cierre de partida
-                              </Button>
-
-                              <Button
-                                type="button"
-                                disabled={
-                                  Boolean(completingMatchId) ||
-                                  Boolean(cancellingMatchId) ||
-                                  Boolean(closingMatchId)
-                                }
-                                onClick={() => handleCancelPendingMatch(match)}
-                                className="h-12 rounded-[0.5rem] border border-red-400/25 bg-transparent px-5 text-xs font-black uppercase tracking-[0.14em] text-red-200 hover:bg-red-400/10"
-                              >
-                                {cancellingMatchId === match.id ? (
-                                  <Loader2 className="mr-2 size-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="mr-2 size-4" />
-                                )}
-                                Cancelar pendiente
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm leading-6 text-[#8a8a85]">
-                            El resultado queda pendiente hasta que un admin
-                            revise la evidencia y confirme quién ganó.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/70 p-5">
-            <div className="mb-4 grid size-10 place-items-center rounded-[0.6rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10">
-              <Swords className="size-5 text-[#f0ed7e]" />
-            </div>
-
-            <p className="text-sm font-black uppercase tracking-[0.12em] text-[#f0ed7e]">
-              Sin partidas pendientes
-            </p>
-
-            <p className="mt-3 text-sm leading-6 text-[#8a8a85]">
-              Cuando se guarde una partida generada, aparecerá acá para cargar
-              evidencia y confirmar resultado.
-            </p>
-          </div>
-        )}
-
-        {message ? (
-          <p className="mt-4 rounded-[0.5rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-4 py-3 text-sm leading-6 text-[#f5f5f3]">
-            {message}
-          </p>
-        ) : null}
-      </div>
+        </ClientPortal>
+      ) : null}
 
       {livePrematchMatch &&
       currentUserId &&
@@ -1361,7 +676,483 @@ export function PendingMatchesPanel({
           onSubmit={handleSubmitMatchClosure}
         />
       ) : null}
-    </section>
+    </>
+  );
+}
+
+function FloatingCurrentMatchPanel({
+  match,
+  bluePlayers,
+  redPlayers,
+  currentMatchPlayer,
+  dailyValeUsage,
+  isAdmin,
+  valeWindowOpen,
+  secondsRemaining,
+  valeUsedCount,
+  isUsingVale,
+  currentPlayerValeUsed,
+  finishingMatchId,
+  cancellingMatchId,
+  closingMatchId,
+  onUseVale,
+  onMarkFinished,
+  onCancel,
+  onOpenClosure,
+}: {
+  match: PendingMatchRecord;
+  bluePlayers: MatchPlayerRecord[];
+  redPlayers: MatchPlayerRecord[];
+  currentMatchPlayer: MatchPlayerRecord | null;
+  dailyValeUsage: DailyValeUsageRecord | null;
+  isAdmin: boolean;
+  valeWindowOpen: boolean;
+  secondsRemaining: number;
+  valeUsedCount: number;
+  isUsingVale: boolean;
+  currentPlayerValeUsed: boolean;
+  finishingMatchId: string | null;
+  cancellingMatchId: string | null;
+  closingMatchId: string | null;
+  onUseVale: () => void;
+  onMarkFinished: () => void;
+  onCancel: () => void;
+  onOpenClosure: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [balanceReadingExpanded, setBalanceReadingExpanded] = useState(false);
+
+  const matchFinished = Boolean(match.match_finished_at);
+
+  const dailyValeUsedInAnotherMatch =
+    Boolean(dailyValeUsage) &&
+    dailyValeUsage?.match_id !== match.id &&
+    !currentPlayerValeUsed;
+
+  const valeButtonDisabled =
+    !valeWindowOpen ||
+    currentPlayerValeUsed ||
+    dailyValeUsedInAnotherMatch ||
+    isUsingVale;
+
+  const valeButtonLabel = currentPlayerValeUsed
+    ? "Vale activado"
+    : dailyValeUsedInAnotherMatch
+      ? "Vale usado hoy"
+      : valeWindowOpen
+        ? "Usar vale"
+        : "Ventana cerrada";
+
+  const statusLabel = matchFinished
+    ? "Esperando cierre"
+    : valeWindowOpen
+      ? "Vale activo"
+      : "Partida en curso";
+
+  const statusValue = matchFinished
+    ? "Resultado pendiente"
+    : valeWindowOpen
+      ? formatCountdown(secondsRemaining)
+      : "En juego";
+
+  const balanceScore = Math.round(Number(match.balance_score ?? 0));
+  const blueWinProbability = Math.round(
+    Number(match.blue_win_probability ?? 50),
+  );
+  const redWinProbability = Math.round(Number(match.red_win_probability ?? 50));
+
+  const ratingDifference = Math.abs(
+    Math.round(Number(match.blue_team_rating)) -
+      Math.round(Number(match.red_team_rating)),
+  );
+
+  const probabilityGap = Math.abs(blueWinProbability - redWinProbability);
+
+  const advantageLabel =
+    probabilityGap <= 6
+      ? "Partida muy pareja"
+      : blueWinProbability > redWinProbability
+        ? "Ventaja leve azul"
+        : "Ventaja leve roja";
+
+  const allMatchPlayers = [...bluePlayers, ...redPlayers];
+
+  const comfortableRoleCount = allMatchPlayers.filter((player) => {
+    return isComfortableAssignedRole(player);
+  }).length;
+
+  const offRoleCount = Math.max(
+    0,
+    allMatchPlayers.length - comfortableRoleCount,
+  );
+
+  const totalPlayersLabel = allMatchPlayers.length || 10;
+
+  const balanceExplanation = [
+    `Se armó la pre-partida con ${allMatchPlayers.length} jugadores y asignación de roles.`,
+    `La diferencia estimada de rating entre equipos es de ${ratingDifference} puntos.`,
+    offRoleCount === 0
+      ? "Todos los jugadores quedaron ubicados en roles principales o secundarios."
+      : `Hay ${offRoleCount} jugador/es fuera de rol cómodo para mantener el balance general.`,
+    probabilityGap <= 6
+      ? "La probabilidad estimada de victoria quedó bastante pareja entre ambos equipos."
+      : "Existe una diferencia moderada de probabilidad entre los equipos.",
+  ];
+
+  const userContext = currentMatchPlayer
+    ? `${formatTeamName(currentMatchPlayer.team)} · ${formatRole(
+        currentMatchPlayer.assigned_role,
+      )}`
+    : isAdmin
+      ? "Vista admin"
+      : "Solo lectura";
+
+  return (
+    <ClientPortal>
+      <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-3 sm:top-4 sm:px-4">
+        <div
+          className={cn(
+            "pointer-events-auto w-full transition-all duration-300",
+            expanded ? "max-w-5xl" : "max-w-2xl",
+          )}
+        >
+          <div
+            className={cn(
+              "overflow-hidden rounded-[0.9rem] border border-[#f0ed7e]/20 bg-[#101010]/94 shadow-[0_1.2rem_3rem_rgba(0,0,0,0.48)] backdrop-blur-xl",
+              expanded
+                ? "custom-scrollbar max-h-[calc(100vh-1.5rem)] overflow-y-auto"
+                : "",
+            )}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#f0ed7e]/45 to-transparent" />
+
+            <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-3 py-1 text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                    <Clock3 className="mr-1.5 size-3.5" />
+                    {statusLabel}
+                  </span>
+
+                  <span className="rounded-full border border-[#2a2929] bg-[#151414]/80 px-2.5 py-1 text-[0.64rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
+                    Partida #{match.match_number}
+                  </span>
+
+                  <span className="rounded-full border border-[#2a2929] bg-[#151414]/80 px-2.5 py-1 text-[0.64rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
+                    {statusValue}
+                  </span>
+                </div>
+
+                <p className="mt-2 truncate text-sm font-black text-[#f5f5f3] sm:text-base">
+                  Equipo Azul vs Equipo Rojo
+                </p>
+
+                <p className="mt-1 truncate text-xs text-[#8a8a85]">
+                  {userContext} · Vales {valeUsedCount}/10
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setExpanded((current) => !current)}
+                className="inline-flex h-11 shrink-0 items-center justify-center rounded-[0.5rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-4 text-xs font-black uppercase tracking-[0.13em] text-[#f0ed7e] transition hover:bg-[#f0ed7e]/15"
+              >
+                {expanded ? (
+                  <ChevronUp className="mr-2 size-4" />
+                ) : (
+                  <ChevronDown className="mr-2 size-4" />
+                )}
+                {expanded ? "Ocultar" : "Ver detalle"}
+              </button>
+            </div>
+
+            {expanded ? (
+              <div className="border-t border-[#2a2929] px-4 pb-4 pt-4">
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <PendingTeamCard
+                    side="blue"
+                    title="Equipo Azul"
+                    players={bluePlayers}
+                  />
+
+                  <PendingTeamCard
+                    side="red"
+                    title="Equipo Rojo"
+                    players={redPlayers}
+                  />
+                </div>
+
+                <div className="mt-4 rounded-[0.75rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/8 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                        Estado de partida
+                      </p>
+
+                      <h4 className="mt-2 text-xl font-black text-[#f5f5f3]">
+                        {matchFinished
+                          ? "Partida finalizada"
+                          : valeWindowOpen
+                            ? `Vale cierra en ${formatCountdown(secondsRemaining)}`
+                            : "Partida en curso"}
+                      </h4>
+
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[#8a8a85]">
+                        {matchFinished
+                          ? "El admin puede cargar el cierre oficial con ganador, campeones, bans y estadísticas."
+                          : "Los jugadores pueden activar su vale durante la ventana habilitada. Luego la partida queda en curso hasta que el admin marque que finalizó."}
+                      </p>
+                    </div>
+
+                    <div className="grid shrink-0 gap-3 sm:min-w-64">
+                      <div className="rounded-[0.6rem] border border-[#2a2929] bg-[#101010]/80 px-4 py-3 text-right">
+                        <p className="text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#8a8a85]">
+                          Vales usados
+                        </p>
+                        <p className="mt-1 text-xl font-black text-[#f5f5f3]">
+                          {valeUsedCount}/10
+                        </p>
+                      </div>
+
+                      {currentMatchPlayer ? (
+                        <Button
+                          type="button"
+                          disabled={valeButtonDisabled}
+                          onClick={onUseVale}
+                          className="h-11 rounded-[0.5rem] border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-5 text-xs font-black uppercase tracking-[0.14em] text-[#75f0a0] hover:bg-[#75f0a0]/15 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {isUsingVale ? (
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                          ) : (
+                            <ShieldCheck className="mr-2 size-4" />
+                          )}
+                          {isUsingVale ? "Activando..." : valeButtonLabel}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 border-t border-[#2a2929] pt-4 md:grid-cols-4">
+                    <MiniMatchStat label="Balance" value={`${balanceScore}%`} />
+                    <MiniMatchStat
+                      label="Azul"
+                      value={`${blueWinProbability}%`}
+                    />
+                    <MiniMatchStat
+                      label="Rojo"
+                      value={`${redWinProbability}%`}
+                    />
+                    <MiniMatchStat
+                      label="Diferencia"
+                      value={`${ratingDifference} pts`}
+                    />
+                  </div>
+
+                  <div className="mt-4 overflow-hidden rounded-[0.7rem] border border-[#2a2929] bg-[#101010]/70">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBalanceReadingExpanded((current) => !current)
+                      }
+                      className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-[#151414]/80"
+                    >
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                          Lectura del balance
+                        </p>
+
+                        <p className="mt-1 text-xs leading-5 text-[#8a8a85]">
+                          {balanceReadingExpanded
+                            ? "Ocultar explicación técnica del enfrentamiento."
+                            : "Ver calidad, ventaja, roles cómodos y explicación del algoritmo."}
+                        </p>
+                      </div>
+
+                      <div className="grid size-9 shrink-0 place-items-center rounded-full border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 text-[#f0ed7e]">
+                        {balanceReadingExpanded ? (
+                          <ChevronUp className="size-4" />
+                        ) : (
+                          <ChevronDown className="size-4" />
+                        )}
+                      </div>
+                    </button>
+
+                    {balanceReadingExpanded ? (
+                      <div className="border-t border-[#2a2929] p-4">
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                          <MiniMatchStat
+                            label="Calidad"
+                            value={`${balanceScore}%`}
+                          />
+                          <MiniMatchStat
+                            label="Ventaja"
+                            value={`${probabilityGap}%`}
+                          />
+                          <MiniMatchStat
+                            label="Diferencia"
+                            value={`${ratingDifference} pts`}
+                          />
+                          <MiniMatchStat
+                            label="Roles cómodos"
+                            value={`${comfortableRoleCount}/${totalPlayersLabel}`}
+                          />
+                          <MiniMatchStat
+                            label="Fuera de rol"
+                            value={`${offRoleCount}/${totalPlayersLabel}`}
+                          />
+                        </div>
+
+                        <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_0.85fr]">
+                          <div className="rounded-[0.7rem] border border-[#2a2929] bg-[#151414]/70 p-4">
+                            <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                              Explicación del algoritmo
+                            </p>
+
+                            <div className="grid gap-2">
+                              {balanceExplanation.map((item, index) => (
+                                <div
+                                  key={`${index}-${item}`}
+                                  className="flex gap-3 rounded-[0.6rem] border border-[#2a2929] bg-[#101010]/70 px-3 py-3"
+                                >
+                                  <div className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 text-[#f0ed7e]">
+                                    <ShieldCheck className="size-3.5" />
+                                  </div>
+
+                                  <p className="text-sm leading-6 text-[#c9c9c4]">
+                                    {item}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="rounded-[0.7rem] border border-[#2a2929] bg-[#151414]/70 p-4">
+                            <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                              Lectura rápida
+                            </p>
+
+                            <div className="grid gap-3">
+                              <div className="rounded-[0.6rem] border border-[#2a2929] bg-[#101010]/70 px-3 py-3">
+                                <p className="text-sm font-black text-[#f5f5f3]">
+                                  {advantageLabel}
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-[#8a8a85]">
+                                  La diferencia estimada de victoria es de{" "}
+                                  {probabilityGap} puntos porcentuales.
+                                </p>
+                              </div>
+
+                              <div className="rounded-[0.6rem] border border-[#2a2929] bg-[#101010]/70 px-3 py-3">
+                                <p className="text-sm font-black text-[#f5f5f3]">
+                                  {comfortableRoleCount} jugadores en roles
+                                  cómodos
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-[#8a8a85]">
+                                  Se toma como cómodo si el jugador quedó en su
+                                  rol principal o secundario.
+                                </p>
+                              </div>
+
+                              <div className="rounded-[0.6rem] border border-[#2a2929] bg-[#101010]/70 px-3 py-3">
+                                <p className="text-sm font-black text-[#f5f5f3]">
+                                  {offRoleCount} jugador/es fuera de rol
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-[#8a8a85]">
+                                  Si hay jugadores fuera de rol, el sistema
+                                  priorizó mantener la partida pareja.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-3 border-t border-[#2a2929] pt-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      {isAdmin && !matchFinished ? (
+                        <>
+                          <Button
+                            type="button"
+                            disabled={
+                              finishingMatchId === match.id ||
+                              Boolean(cancellingMatchId) ||
+                              Boolean(closingMatchId)
+                            }
+                            onClick={onMarkFinished}
+                            className="h-11 rounded-[0.5rem] bg-[#f0ed7e] px-5 text-xs font-black uppercase tracking-[0.14em] text-[#151414] hover:bg-[#d8d46d]"
+                          >
+                            {finishingMatchId === match.id ? (
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                              <ShieldCheck className="mr-2 size-4" />
+                            )}
+                            Finalizó la partida
+                          </Button>
+
+                          <Button
+                            type="button"
+                            disabled={
+                              finishingMatchId === match.id ||
+                              Boolean(cancellingMatchId) ||
+                              Boolean(closingMatchId)
+                            }
+                            onClick={onCancel}
+                            className="h-11 rounded-[0.5rem] border border-red-400/25 bg-transparent px-5 text-xs font-black uppercase tracking-[0.14em] text-red-200 hover:bg-red-400/10"
+                          >
+                            {cancellingMatchId === match.id ? (
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="mr-2 size-4" />
+                            )}
+                            Cancelar pendiente
+                          </Button>
+                        </>
+                      ) : null}
+
+                      {isAdmin && matchFinished ? (
+                        <>
+                          <Button
+                            type="button"
+                            disabled={
+                              closingMatchId === match.id ||
+                              Boolean(cancellingMatchId)
+                            }
+                            onClick={onOpenClosure}
+                            className="h-11 rounded-[0.5rem] bg-[#f0ed7e] px-5 text-xs font-black uppercase tracking-[0.14em] text-[#151414] hover:bg-[#d8d46d]"
+                          >
+                            {closingMatchId === match.id ? (
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                              <ShieldCheck className="mr-2 size-4" />
+                            )}
+                            Cargar cierre
+                          </Button>
+
+                          <Button
+                            type="button"
+                            disabled={
+                              Boolean(cancellingMatchId) ||
+                              closingMatchId === match.id
+                            }
+                            onClick={onCancel}
+                            className="h-11 rounded-[0.5rem] border border-red-400/25 bg-transparent px-5 text-xs font-black uppercase tracking-[0.14em] text-red-200 hover:bg-red-400/10"
+                          >
+                            <Trash2 className="mr-2 size-4" />
+                            Cancelar pendiente
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </ClientPortal>
   );
 }
 

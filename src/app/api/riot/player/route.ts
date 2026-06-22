@@ -32,6 +32,8 @@ type RiotLeagueEntry = {
   hotStreak: boolean;
 };
 
+const FIXED_POWERPETES_REGION: RegionCode = "LAS";
+
 const routeByRegion: Record<
   RegionCode,
   {
@@ -118,7 +120,7 @@ export async function GET(request: NextRequest) {
 
   const gameName = searchParams.get("gameName")?.trim();
   const tagLine = searchParams.get("tagLine")?.trim();
-  const region = searchParams.get("region")?.trim().toUpperCase() ?? "LAS";
+  const region = FIXED_POWERPETES_REGION;
 
   if (!gameName || !tagLine) {
     return NextResponse.json(
@@ -129,7 +131,7 @@ export async function GET(request: NextRequest) {
 
   if (!isRegionCode(region)) {
     return NextResponse.json(
-      { error: "Región no soportada." },
+      { error: "PowerPetes funciona únicamente con región LAS." },
       { status: 400 },
     );
   }

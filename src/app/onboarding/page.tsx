@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Gamepad2, ShieldCheck } from "lucide-react";
 
@@ -7,7 +8,7 @@ const steps = [
   {
     icon: Gamepad2,
     title: "Riot ID",
-    description: "Nick, tagline y servidor.",
+    description: "Nick, tagline y región LAS bloqueada.",
   },
   {
     icon: ShieldCheck,
@@ -38,11 +39,16 @@ export default function OnboardingPage() {
 
           <div className="hidden items-center gap-3 sm:flex">
             <div className="relative grid size-11 place-items-center rounded-[0.5rem] bg-[#232121]">
-              <img
-                src="/powerlogo.svg"
-                alt="Power Petes"
-                className="absolute left-1/2 top-1/2 size-[3.2rem] -translate-x-1/2 -translate-y-1/2 object-contain"
-              />
+              <div className="relative size-[3.2rem]">
+                <Image
+                  src="/powerlogo.svg"
+                  alt="Power Petes"
+                  fill
+                  priority
+                  sizes="3.2rem"
+                  className="object-contain"
+                />
+              </div>
             </div>
 
             <div>
@@ -109,8 +115,9 @@ export default function OnboardingPage() {
             </h2>
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c9c9c4]">
-              Usá datos reales de Solo/Duo. No se tiene en cuenta Flex Queue
-              para calcular el nivel competitivo base.
+              Usá datos reales de Solo/Duo. PowerPetes funciona actualmente para
+              jugadores de LAS, por eso la región queda fija y no se puede
+              modificar.
             </p>
           </div>
 

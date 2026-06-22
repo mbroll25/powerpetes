@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Search, X } from "lucide-react";
 
@@ -155,9 +156,12 @@ export function ChampionMultiSelect({
                     onClick={() => selectChampion(champion)}
                     className="flex w-full items-center gap-3 rounded-[0.5rem] px-3 py-2 text-left transition hover:bg-[#2b2b2b]"
                   >
-                    <img
+                    <Image
                       src={champion.iconUrl}
                       alt={champion.name}
+                      width={32}
+                      height={32}
+                      sizes="2rem"
                       className="size-8 rounded-xl object-cover"
                     />
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { gsap } from "gsap";
 import {
@@ -7,11 +8,10 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Clock3,
-  History,
   Settings2,
   ShieldCheck,
   Swords,
+  UserCircle,
   UserRound,
 } from "lucide-react";
 
@@ -44,16 +44,6 @@ const dashboardNavItems: DashboardNavItem[] = [
     icon: Swords,
   },
   {
-    id: "pending-matches",
-    label: "Pendientes",
-    icon: Clock3,
-  },
-  {
-    id: "completed-matches",
-    label: "Historial",
-    icon: History,
-  },
-  {
     id: "tournament-standings",
     label: "Tabla",
     icon: BarChart3,
@@ -71,8 +61,7 @@ function scrollToSection(sectionId: string) {
   if (!element) return;
 
   const offset = 28;
-  const targetY =
-    element.getBoundingClientRect().top + window.scrollY - offset;
+  const targetY = element.getBoundingClientRect().top + window.scrollY - offset;
 
   const scrollState = {
     y: window.scrollY,
@@ -216,9 +205,27 @@ function DesktopDashboardNav({
         </div>
 
         <div className="mt-2 border-t border-[#2a2929] pt-2">
+          <Link
+            href="/dashboard/profile"
+            className={cn(
+              "group flex items-center rounded-4xl px-3 py-2.5 text-left text-[#8a8a85] transition hover:bg-[#151414] hover:text-[#f0ed7e]",
+              expanded ? "gap-3" : "justify-center",
+            )}
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-[0.5rem] border border-[#2a2929] bg-[#151414]/80 transition group-hover:border-[#f0ed7e]/30">
+              <UserCircle className="size-4" />
+            </span>
+
+            {expanded ? (
+              <span className="min-w-0 truncate text-[0.68rem] font-black uppercase tracking-[0.13em]">
+                Perfil
+              </span>
+            ) : null}
+          </Link>
+
           <div
             className={cn(
-              "flex items-center justify-center gap-2 rounded-[0.6rem] bg-[#151414]/80 px-2 py-2",
+              "mt-1 flex items-center justify-center gap-2 rounded-[0.6rem] bg-[#151414]/80 px-2 py-2",
               expanded ? "justify-start px-3" : "justify-center",
             )}
           >
@@ -267,6 +274,16 @@ function MobileDashboardNav() {
               </button>
             );
           })}
+          <Link
+            href="/dashboard/profile"
+            className="flex min-w-20 flex-col items-center justify-center gap-1 rounded-4xl px-3 py-2 text-[#8a8a85] transition hover:bg-[#151414] hover:text-[#f0ed7e]"
+          >
+            <UserCircle className="size-4" />
+
+            <span className="text-[0.58rem] font-black uppercase tracking-[0.11em]">
+              Perfil
+            </span>
+          </Link>
         </div>
       </div>
     </nav>
@@ -292,9 +309,7 @@ export function DashboardResponsiveShell({
 
       <MobileDashboardNav />
 
-      <div className="mx-auto w-full max-w-352 pb-24 xl:pb-0">
-        {children}
-      </div>
+      <div className="mx-auto w-full max-w-352 pb-24 xl:pb-0">{children}</div>
     </div>
   );
 }

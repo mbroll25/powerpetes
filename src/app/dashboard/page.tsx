@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import {
   Activity,
   BarChart3,
-  CalendarDays,
   History,
   ShieldCheck,
   Trophy,
@@ -17,7 +16,6 @@ import DotField from "@/components/effects/dot-field";
 import { DashboardMotion } from "@/components/dashboard/dashboard-motion";
 import { MatchGeneratorPanel } from "@/components/balance/match-generator-panel";
 import { PendingMatchesPanel } from "@/components/balance/pending-matches-panel";
-import { CompletedMatchesPanel } from "@/components/balance/completed-matches-panel";
 import { DashboardResponsiveShell } from "@/components/dashboard/dashboard-section-nav";
 
 type ProfileRow = {
@@ -391,6 +389,7 @@ export default async function DashboardPage() {
             <div id="match-generator" className="scroll-mt-8">
               <MatchGeneratorPanel
                 activeTournamentId={activeTournament?.id ?? null}
+                isAdmin={isAdmin}
               />
             </div>
 
@@ -398,12 +397,6 @@ export default async function DashboardPage() {
               <PendingMatchesPanel
                 activeTournamentId={activeTournament?.id ?? null}
                 isAdmin={isAdmin}
-              />
-            </div>
-
-            <div id="completed-matches" className="scroll-mt-8">
-              <CompletedMatchesPanel
-                activeTournamentId={activeTournament?.id ?? null}
               />
             </div>
 
@@ -560,45 +553,6 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                 )}
-
-                <div
-                  data-dashboard-anim="panel"
-                  className="rounded-[0.75rem] border border-[#2a2929] bg-[#101010]/90 p-5 shadow-[0_1rem_3rem_rgba(0,0,0,0.18)]"
-                >
-                  <div className="mb-3 flex items-center gap-2">
-                    <History className="size-4 text-[#f0ed7e]" />
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
-                      Historial
-                    </p>
-                  </div>
-
-                  <h3 className="text-2xl font-black">Próxima etapa</h3>
-
-                  <p className="mt-3 text-sm leading-6 text-[#8a8a85]">
-                    Después vamos a mostrar torneos finalizados, ganadores y
-                    estadísticas históricas del grupo.
-                  </p>
-                </div>
-
-                <div
-                  data-dashboard-anim="panel"
-                  className="rounded-[0.75rem] border border-[#2a2929] bg-[#101010]/90 p-5 shadow-[0_1rem_3rem_rgba(0,0,0,0.18)]"
-                >
-                  <div className="mb-3 flex items-center gap-2">
-                    <CalendarDays className="size-4 text-[#f0ed7e]" />
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
-                      Balance
-                    </p>
-                  </div>
-
-                  <h3 className="text-2xl font-black">Motor v1</h3>
-
-                  <p className="mt-3 text-sm leading-6 text-[#8a8a85]">
-                    El siguiente módulo va a permitir seleccionar 10 jugadores y
-                    generar equipos según rating, roles, elo y rendimiento
-                    histórico.
-                  </p>
-                </div>
               </aside>
             </section>
           </section>

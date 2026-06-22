@@ -9,6 +9,7 @@ const tickerItems = [
   "balance por elo y roles",
   "partidas personalizadas 5v5",
   "algoritmo transparente",
+  "rio gallego una pasión",
 ];
 
 export function HeroTicker() {

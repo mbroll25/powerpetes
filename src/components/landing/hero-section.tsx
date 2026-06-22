@@ -88,7 +88,7 @@ export function HeroSection() {
         <source src="/videos/lol-background.mp4" type="video/mp4" />
       </video>
 
-      <div className="absolute inset-0 bg-[#151414]/50 sm:bg-[#151414]/45" />
+      <div className="absolute inset-0 bg-[#151414]/62 sm:bg-[#151414]/56" />
       <div className="absolute inset-0 bg-linear-to-r from-[#151414]/96 via-[#151414]/64 to-[#151414]/88" />
 
       <DotField
@@ -118,6 +118,7 @@ export function HeroSection() {
           alt="Jugador profesional"
           fill
           priority
+          sizes="(min-width: 1024px) 38rem, (min-width: 768px) 32rem, 90vw"
           className="relative z-10 object-contain object-bottom"
         />
       </div>

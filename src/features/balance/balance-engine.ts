@@ -57,6 +57,21 @@ export type BalancedTeam = {
   totalRolePenalty: number;
   averagePeakRating: number;
   averageWinrate: number;
+  averageInternalMatches: number;
+};
+
+export type RoleMatchupImpact = "low" | "medium" | "high";
+
+export type RoleMatchup = {
+  role: Role;
+  bluePlayerName: string;
+  redPlayerName: string;
+  blueRating: number;
+  redRating: number;
+  difference: number;
+  weightedDifference: number;
+  favoredTeam: TeamSide | "even";
+  impact: RoleMatchupImpact;
 };
 
 export type BalanceResult = {
@@ -64,6 +79,8 @@ export type BalanceResult = {
   redTeam: BalancedTeam;
   balanceScore: number;
   ratingDifference: number;
+  totalRoleMismatch: number;
+  roleMatchups: RoleMatchup[];
   blueWinProbability: number;
   redWinProbability: number;
   evaluatedCombinations: number;
@@ -80,6 +97,15 @@ export type RatingUpdate = {
   nextTournamentRating: number;
   nextGlobalRating: number;
 };
+
+export const POWERPETES_BALANCE_RULES = [
+  "PowerPetes usa los datos de Riot como punto de partida para jugadores nuevos o con poco historial interno.",
+  "A medida que un jugador acumula partidas dentro de PowerPetes, el historial interno pasa a tener más peso que Riot.",
+  "El sistema no mira solo el rating total: también compara Top contra Top, Jungla contra Jungla, Mid contra Mid, ADC contra ADC y Soporte contra Soporte.",
+  "Jugar en rol principal no tiene penalización. Jugar en rol secundario tiene una penalización leve. Jugar fuera de rol tiene una penalización mayor.",
+  "El sistema intenta que ambos equipos tengan una probabilidad de victoria lo más cercana posible al 50%.",
+  "Después de cada partida cerrada, PowerPetes actualiza el rating interno según el resultado y la dificultad del enfrentamiento.",
+] as const;
 
 const ROLES: Role[] = ["TOP", "JUNGLE", "MID", "ADC", "SUPPORT"];
 
@@ -111,6 +137,14 @@ const CHAMPION_POOL_FLEX_BONUS: Record<ChampionPool, number> = {
   large: 10,
 };
 
+const ROLE_IMPORTANCE_WEIGHT: Record<Role, number> = {
+  TOP: 1,
+  JUNGLE: 1.25,
+  MID: 1.15,
+  ADC: 1.1,
+  SUPPORT: 0.9,
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -136,6 +170,22 @@ function getLpBonus(lp: number | null) {
   if (lp == null) return 0;
 
   return clamp(lp, 0, 100) * 0.25;
+}
+
+function formatRole(role: Role) {
+  const labels: Record<Role, string> = {
+    TOP: "Top",
+    JUNGLE: "Jungla",
+    MID: "Mid",
+    ADC: "ADC",
+    SUPPORT: "Soporte",
+  };
+
+  return labels[role];
+}
+
+function formatTeam(side: TeamSide) {
+  return side === "blue" ? "Equipo Azul" : "Equipo Rojo";
 }
 
 function calculateTierRating(
@@ -170,6 +220,18 @@ function getHistoricalWinrate(player: BalancePlayer) {
   }
 
   return 50;
+}
+
+function getInternalExperienceLabel(averageInternalMatches: number) {
+  if (averageInternalMatches < 5) {
+    return "poco historial interno";
+  }
+
+  if (averageInternalMatches < 20) {
+    return "historial interno en crecimiento";
+  }
+
+  return "historial interno sólido";
 }
 
 export function calculateProfileRating(player: BalancePlayer) {
@@ -207,9 +269,21 @@ export function calculateEffectiveRating(player: BalancePlayer) {
   const globalRating = player.globalRating ?? profileRating;
   const tournamentRating = player.tournamentRating ?? globalRating;
 
-  const historyWeight = clamp(player.totalMatches / 40, 0, 0.5);
-  const tournamentWeight = clamp(player.tournamentMatches / 20, 0, 0.35);
-  const profileWeight = clamp(1 - historyWeight - tournamentWeight, 0.2, 1);
+  const hasGlobalHistory =
+    player.totalMatches > 0 && player.globalRating != null;
+
+  const hasTournamentHistory =
+    player.tournamentMatches > 0 && player.tournamentRating != null;
+
+  const historyWeight = hasGlobalHistory
+    ? clamp(player.totalMatches / 30, 0, 0.72)
+    : 0;
+
+  const tournamentWeight = hasTournamentHistory
+    ? clamp(player.tournamentMatches / 18, 0, 0.25)
+    : 0;
+
+  const profileWeight = clamp(1 - historyWeight - tournamentWeight, 0.08, 1);
 
   const totalWeight = profileWeight + historyWeight + tournamentWeight;
 
@@ -301,11 +375,63 @@ function getPermutations<T>(items: T[]) {
 
 const ROLE_PERMUTATIONS = getPermutations(ROLES);
 
-function buildBestTeam(side: TeamSide, players: BalancePlayer[]): BalancedTeam {
-  let bestPlayers: AssignedPlayer[] = [];
-  let bestScore = Number.NEGATIVE_INFINITY;
+function buildTeamFromAssignment(
+  side: TeamSide,
+  assignedPlayers: AssignedPlayer[],
+): BalancedTeam {
+  if (assignedPlayers.length !== 5) {
+    throw new Error("A balanced team must have exactly 5 players.");
+  }
 
-  for (const rolePermutation of ROLE_PERMUTATIONS) {
+  const totalRating = assignedPlayers.reduce((sum, assignedPlayer) => {
+    return sum + assignedPlayer.finalRating;
+  }, 0);
+
+  const totalRolePenalty = assignedPlayers.reduce((sum, assignedPlayer) => {
+    return sum + assignedPlayer.rolePenalty;
+  }, 0);
+
+  const averagePeakRating =
+    assignedPlayers.reduce((sum, assignedPlayer) => {
+      return (
+        sum +
+        calculateTierRating(
+          assignedPlayer.player.peakTier,
+          assignedPlayer.player.peakDivision,
+          0,
+        )
+      );
+    }, 0) / assignedPlayers.length;
+
+  const averageWinrate =
+    assignedPlayers.reduce((sum, assignedPlayer) => {
+      return sum + getHistoricalWinrate(assignedPlayer.player);
+    }, 0) / assignedPlayers.length;
+
+  const averageInternalMatches =
+    assignedPlayers.reduce((sum, assignedPlayer) => {
+      return sum + assignedPlayer.player.totalMatches;
+    }, 0) / assignedPlayers.length;
+
+  return {
+    side,
+    players: assignedPlayers.slice().sort((a, b) => {
+      return ROLES.indexOf(a.assignedRole) - ROLES.indexOf(b.assignedRole);
+    }),
+    totalRating: round(totalRating),
+    averageRating: round(totalRating / assignedPlayers.length),
+    totalRolePenalty: round(totalRolePenalty),
+    averagePeakRating: round(averagePeakRating),
+    averageWinrate: round(averageWinrate),
+    averageInternalMatches: round(averageInternalMatches),
+  };
+}
+
+function buildTeamRoleCandidates(
+  side: TeamSide,
+  players: BalancePlayer[],
+): BalancedTeam[] {
+  return ROLE_PERMUTATIONS.map((rolePermutation) => {
     const assignedPlayers = players.map((player, index) => {
       const assignedRole = rolePermutation[index];
 
@@ -316,62 +442,8 @@ function buildBestTeam(side: TeamSide, players: BalancePlayer[]): BalancedTeam {
       return assignPlayerToRole(player, assignedRole);
     });
 
-    const totalRating = assignedPlayers.reduce((sum, assignedPlayer) => {
-      return sum + assignedPlayer.finalRating;
-    }, 0);
-
-    const totalRolePenalty = assignedPlayers.reduce((sum, assignedPlayer) => {
-      return sum + assignedPlayer.rolePenalty;
-    }, 0);
-
-    const score = totalRating - totalRolePenalty * 0.65;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestPlayers = assignedPlayers;
-    }
-  }
-
-  if (bestPlayers.length !== 5) {
-    throw new Error("Could not assign team roles correctly.");
-  }
-
-  const totalRating = bestPlayers.reduce((sum, assignedPlayer) => {
-    return sum + assignedPlayer.finalRating;
-  }, 0);
-
-  const totalRolePenalty = bestPlayers.reduce((sum, assignedPlayer) => {
-    return sum + assignedPlayer.rolePenalty;
-  }, 0);
-
-  const averagePeakRating =
-    bestPlayers.reduce((sum, assignedPlayer) => {
-      return (
-        sum +
-        calculateTierRating(
-          assignedPlayer.player.peakTier,
-          assignedPlayer.player.peakDivision,
-          0,
-        )
-      );
-    }, 0) / bestPlayers.length;
-
-  const averageWinrate =
-    bestPlayers.reduce((sum, assignedPlayer) => {
-      return sum + getHistoricalWinrate(assignedPlayer.player);
-    }, 0) / bestPlayers.length;
-
-  return {
-    side,
-    players: bestPlayers.sort((a, b) => {
-      return ROLES.indexOf(a.assignedRole) - ROLES.indexOf(b.assignedRole);
-    }),
-    totalRating: round(totalRating),
-    averageRating: round(totalRating / bestPlayers.length),
-    totalRolePenalty,
-    averagePeakRating: round(averagePeakRating),
-    averageWinrate: round(averageWinrate),
-  };
+    return buildTeamFromAssignment(side, assignedPlayers);
+  });
 }
 
 function getCombinations<T>(items: T[], size: number) {
@@ -384,7 +456,13 @@ function getCombinations<T>(items: T[], size: number) {
     }
 
     for (let index = startIndex; index < items.length; index += 1) {
-      currentCombination.push(items[index]);
+      const item = items[index];
+
+      if (item === undefined) {
+        continue;
+      }
+
+      currentCombination.push(item);
       buildCombination(index + 1, currentCombination);
       currentCombination.pop();
     }
@@ -397,6 +475,55 @@ function getCombinations<T>(items: T[], size: number) {
 
 function calculateWinProbability(teamRating: number, opponentRating: number) {
   return 1 / (1 + 10 ** ((opponentRating - teamRating) / 400));
+}
+
+function getRoleImpact(difference: number): RoleMatchupImpact {
+  if (difference >= 180) return "high";
+  if (difference >= 95) return "medium";
+  return "low";
+}
+
+function calculateRoleMatchups(blueTeam: BalancedTeam, redTeam: BalancedTeam) {
+  const matchups = ROLES.map((role) => {
+    const bluePlayer = blueTeam.players.find((player) => {
+      return player.assignedRole === role;
+    });
+
+    const redPlayer = redTeam.players.find((player) => {
+      return player.assignedRole === role;
+    });
+
+    if (!bluePlayer || !redPlayer) {
+      throw new Error(`Missing role assignment for ${role}.`);
+    }
+
+    const rawDifference = bluePlayer.finalRating - redPlayer.finalRating;
+    const difference = Math.abs(rawDifference);
+
+    const favoredTeam: TeamSide | "even" =
+      difference < 25 ? "even" : rawDifference > 0 ? "blue" : "red";
+
+    return {
+      role,
+      bluePlayerName: bluePlayer.player.displayName,
+      redPlayerName: redPlayer.player.displayName,
+      blueRating: round(bluePlayer.finalRating),
+      redRating: round(redPlayer.finalRating),
+      difference: round(difference),
+      weightedDifference: round(difference * ROLE_IMPORTANCE_WEIGHT[role]),
+      favoredTeam,
+      impact: getRoleImpact(difference),
+    };
+  });
+
+  const totalRoleMismatch = matchups.reduce((sum, matchup) => {
+    return sum + matchup.weightedDifference;
+  }, 0);
+
+  return {
+    matchups,
+    totalRoleMismatch: round(totalRoleMismatch),
+  };
 }
 
 function evaluateTeams(blueTeam: BalancedTeam, redTeam: BalancedTeam) {
@@ -418,13 +545,19 @@ function evaluateTeams(blueTeam: BalancedTeam, redTeam: BalancedTeam) {
 
   const probabilityDeviation = Math.abs(0.5 - blueWinProbability) * 100;
 
+  const { matchups, totalRoleMismatch } = calculateRoleMatchups(
+    blueTeam,
+    redTeam,
+  );
+
   const balanceScore = clamp(
     100 -
-      ratingDifference * 0.08 -
-      rolePenaltyTotal * 0.05 -
-      peakDifference * 0.025 -
-      winrateDifference * 0.4 -
-      probabilityDeviation * 0.65,
+      ratingDifference * 0.065 -
+      totalRoleMismatch * 0.055 -
+      rolePenaltyTotal * 0.045 -
+      peakDifference * 0.018 -
+      winrateDifference * 0.35 -
+      probabilityDeviation * 0.6,
     0,
     100,
   );
@@ -432,52 +565,151 @@ function evaluateTeams(blueTeam: BalancedTeam, redTeam: BalancedTeam) {
   return {
     balanceScore: round(balanceScore),
     ratingDifference: round(ratingDifference),
+    totalRoleMismatch: round(totalRoleMismatch),
+    roleMatchups: matchups,
     blueWinProbability: round(blueWinProbability * 100),
     redWinProbability: round((1 - blueWinProbability) * 100),
   };
 }
 
+function getTotalRolePenalty(result: Omit<BalanceResult, "explanation">) {
+  return result.blueTeam.totalRolePenalty + result.redTeam.totalRolePenalty;
+}
+
+function getBiggestRoleMismatch(roleMatchups: RoleMatchup[]) {
+  return roleMatchups
+    .slice()
+    .sort((a, b) => b.weightedDifference - a.weightedDifference)[0];
+}
+
+function isBetterResult(
+  candidate: Omit<BalanceResult, "explanation">,
+  current: Omit<BalanceResult, "explanation"> | null,
+) {
+  if (!current) return true;
+
+  if (candidate.balanceScore !== current.balanceScore) {
+    return candidate.balanceScore > current.balanceScore;
+  }
+
+  if (candidate.ratingDifference !== current.ratingDifference) {
+    return candidate.ratingDifference < current.ratingDifference;
+  }
+
+  if (candidate.totalRoleMismatch !== current.totalRoleMismatch) {
+    return candidate.totalRoleMismatch < current.totalRoleMismatch;
+  }
+
+  return getTotalRolePenalty(candidate) < getTotalRolePenalty(current);
+}
+
 function buildExplanation(result: Omit<BalanceResult, "explanation">) {
   const explanations: string[] = [];
 
-  explanations.push(
-    `Se evaluaron ${result.evaluatedCombinations} divisiones únicas de equipos y asignaciones de roles.`,
-  );
-
-  explanations.push(
-    `La diferencia final de rating entre equipos es de ${Math.round(
-      result.ratingDifference,
-    )} puntos.`,
-  );
-
-  const totalRolePenalty =
-    result.blueTeam.totalRolePenalty + result.redTeam.totalRolePenalty;
-
-  if (totalRolePenalty === 0) {
-    explanations.push(
-      "Todos los jugadores quedaron ubicados en roles principales o cómodos.",
-    );
-  } else {
-    explanations.push(
-      `El sistema aceptó una penalización total de roles de ${Math.round(
-        totalRolePenalty,
-      )} puntos para mantener un mejor balance general.`,
-    );
-  }
-
+  const totalRolePenalty = getTotalRolePenalty(result);
   const probabilityGap = Math.abs(
     result.blueWinProbability - result.redWinProbability,
   );
 
-  if (probabilityGap <= 8) {
+  const averageInternalMatches = round(
+    (result.blueTeam.averageInternalMatches +
+      result.redTeam.averageInternalMatches) /
+      2,
+  );
+
+  const internalExperienceLabel = getInternalExperienceLabel(
+    averageInternalMatches,
+  );
+
+  const biggestMismatch = getBiggestRoleMismatch(result.roleMatchups);
+
+  explanations.push(
+    `PowerPetes analizó ${result.evaluatedCombinations.toLocaleString(
+      "es-AR",
+    )} escenarios posibles entre divisiones de equipos y asignaciones de roles.`,
+  );
+
+  explanations.push(
+    `El score de balance final fue ${result.balanceScore}/100. Cuanto más cerca de 100, más pareja debería sentirse la partida.`,
+  );
+
+  explanations.push(
+    `La diferencia total de rating entre equipos quedó en ${Math.round(
+      result.ratingDifference,
+    )} puntos: ${formatTeam("blue")} ${Math.round(
+      result.blueTeam.totalRating,
+    )} vs ${formatTeam("red")} ${Math.round(result.redTeam.totalRating)}.`,
+  );
+
+  explanations.push(
+    `La probabilidad estimada de victoria quedó en ${result.blueWinProbability}% para ${formatTeam(
+      "blue",
+    )} y ${result.redWinProbability}% para ${formatTeam("red")}.`,
+  );
+
+  explanations.push(
+    "Además del rating total, el sistema comparó línea por línea: Top, Jungla, Mid, ADC y Soporte. Esto evita que dos equipos parezcan parejos en total pero estén rotos por una línea demasiado desbalanceada.",
+  );
+
+  if (biggestMismatch) {
+    if (biggestMismatch.favoredTeam === "even") {
+      explanations.push(
+        `La línea más pareja fue ${formatRole(
+          biggestMismatch.role,
+        )}, con una diferencia de solo ${Math.round(
+          biggestMismatch.difference,
+        )} puntos.`,
+      );
+    } else {
+      explanations.push(
+        `La mayor diferencia individual quedó en ${formatRole(
+          biggestMismatch.role,
+        )}: ventaja para ${formatTeam(
+          biggestMismatch.favoredTeam,
+        )} por ${Math.round(biggestMismatch.difference)} puntos.`,
+      );
+    }
+  }
+
+  if (totalRolePenalty === 0) {
     explanations.push(
-      "La probabilidad estimada de victoria quedó bastante pareja entre ambos equipos.",
+      "Todos los jugadores quedaron ubicados en roles principales o roles cómodos, sin penalización relevante por fuera de rol.",
     );
   } else {
     explanations.push(
-      "El sistema priorizó el mejor balance disponible, aunque todavía existe una diferencia moderada de probabilidad entre equipos.",
+      `El sistema aplicó una penalización total de ${Math.round(
+        totalRolePenalty,
+      )} puntos por roles no ideales. Esta penalización evita sobrevalorar a un jugador cuando queda fuera de su rol principal.`,
     );
   }
+
+  if (averageInternalMatches < 5) {
+    explanations.push(
+      `Como este lobby todavía tiene ${internalExperienceLabel}, PowerPetes usa más los datos iniciales de Riot, peak elo, SoloQ y perfil del jugador para estimar fuerza inicial.`,
+    );
+  } else if (averageInternalMatches < 20) {
+    explanations.push(
+      `Como este lobby ya tiene ${internalExperienceLabel}, PowerPetes mezcla datos externos con resultados internos para ajustar mejor el nivel real de cada jugador.`,
+    );
+  } else {
+    explanations.push(
+      `Como este lobby ya tiene ${internalExperienceLabel}, PowerPetes prioriza el rendimiento interno por encima de Riot. El historial real jugado en PowerPetes pasa a ser la fuente principal.`,
+    );
+  }
+
+  if (probabilityGap <= 8) {
+    explanations.push(
+      "La diferencia de probabilidad entre equipos quedó baja, por lo que el sistema considera que la partida debería ser competitiva.",
+    );
+  } else {
+    explanations.push(
+      "La diferencia de probabilidad todavía es moderada. PowerPetes eligió el mejor balance disponible entre los 10 jugadores seleccionados, pero el lobby no es perfectamente simétrico.",
+    );
+  }
+
+  explanations.push(
+    "Después de cerrar la partida, el resultado real actualiza el rating interno. Ganar contra un equipo favorito suma más, perder contra un equipo favorito castiga menos, y con el tiempo PowerPetes aprende mejor el nivel real de cada jugador.",
+  );
 
   return explanations;
 }
@@ -497,6 +729,7 @@ export function generateBalancedTeams(players: BalancePlayer[]): BalanceResult {
   );
 
   let bestResult: Omit<BalanceResult, "explanation"> | null = null;
+  let evaluatedScenarios = 0;
 
   for (const bluePlayers of blueCombinations) {
     const bluePlayerIds = new Set(bluePlayers.map((player) => player.id));
@@ -505,21 +738,31 @@ export function generateBalancedTeams(players: BalancePlayer[]): BalanceResult {
       return !bluePlayerIds.has(player.id);
     });
 
-    const blueTeam = buildBestTeam("blue", bluePlayers);
-    const redTeam = buildBestTeam("red", redPlayers);
+    const blueCandidates = buildTeamRoleCandidates("blue", bluePlayers);
+    const redCandidates = buildTeamRoleCandidates("red", redPlayers);
 
-    const evaluation = evaluateTeams(blueTeam, redTeam);
+    for (const blueTeam of blueCandidates) {
+      for (const redTeam of redCandidates) {
+        evaluatedScenarios += 1;
 
-    if (!bestResult || evaluation.balanceScore > bestResult.balanceScore) {
-      bestResult = {
-        blueTeam,
-        redTeam,
-        balanceScore: evaluation.balanceScore,
-        ratingDifference: evaluation.ratingDifference,
-        blueWinProbability: evaluation.blueWinProbability,
-        redWinProbability: evaluation.redWinProbability,
-        evaluatedCombinations: blueCombinations.length,
-      };
+        const evaluation = evaluateTeams(blueTeam, redTeam);
+
+        const candidate: Omit<BalanceResult, "explanation"> = {
+          blueTeam,
+          redTeam,
+          balanceScore: evaluation.balanceScore,
+          ratingDifference: evaluation.ratingDifference,
+          totalRoleMismatch: evaluation.totalRoleMismatch,
+          roleMatchups: evaluation.roleMatchups,
+          blueWinProbability: evaluation.blueWinProbability,
+          redWinProbability: evaluation.redWinProbability,
+          evaluatedCombinations: evaluatedScenarios,
+        };
+
+        if (isBetterResult(candidate, bestResult)) {
+          bestResult = candidate;
+        }
+      }
     }
   }
 
@@ -527,9 +770,14 @@ export function generateBalancedTeams(players: BalancePlayer[]): BalanceResult {
     throw new Error("Could not generate balanced teams.");
   }
 
-  return {
+  const finalResult = {
     ...bestResult,
-    explanation: buildExplanation(bestResult),
+    evaluatedCombinations: evaluatedScenarios,
+  };
+
+  return {
+    ...finalResult,
+    explanation: buildExplanation(finalResult),
   };
 }
 

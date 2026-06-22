@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Swords, Users } from "lucide-react";
 import { YoutubeBackgroundVideo } from "@/components/landing/youtube-background-video";
@@ -49,6 +50,19 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
         glowColor="rgba(21,20,20,0.65)"
       />
 
+      <div className="pointer-events-none absolute bottom-0 right-64 z-8 hidden h-[90vh] w-[48vw] max-w-200 lg:block xl:right-80 xl:h-[94vh] xl:w-[50vw] 2xl:right-120">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_55%_52%,rgba(240,237,126,0.14),transparent_44%)] blur-2xl" />
+
+        <Image
+          src="/danieldick.png"
+          alt="Jugador profesional"
+          fill
+          priority
+          sizes="(min-width: 1536px) 50vw, (min-width: 1024px) 48vw, 0vw"
+          className="relative z-10 object-contain object-bottom"
+        />
+      </div>
+
       <section className="relative z-10 flex min-h-dvh flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_30rem]">
         <div className="flex px-4 pt-5 sm:px-6 sm:pt-7 lg:min-h-dvh lg:flex-col lg:justify-between lg:px-10 lg:py-9">
           <Link
@@ -99,11 +113,16 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
             <div className="mb-7 lg:hidden">
               <div className="mb-6 flex items-center gap-4">
                 <div className="relative grid size-12 place-items-center rounded-[0.5rem] bg-[#232121]">
-                  <img
-                    src="/powerlogo.svg"
-                    alt="Power Petes"
-                    className="absolute left-1/2 top-1/2 size-[3.45rem] -translate-x-1/2 -translate-y-1/2 object-contain"
-                  />
+                  <div className="relative size-[3.45rem]">
+                    <Image
+                      src="/powerlogo.svg"
+                      alt="Power Petes"
+                      fill
+                      priority
+                      sizes="3.45rem"
+                      className="object-contain"
+                    />
+                  </div>
                 </div>
 
                 <div>

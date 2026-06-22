@@ -5,7 +5,7 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Crear cuenta"
-      description="Registrate para guardar tu perfil, rol principal, rol secundario y nivel competitivo."
+      description="Registrate para entrar a la liga privada de PowerPetes en LAS y guardar tu perfil competitivo."
     >
       <RegisterForm />
     </AuthShell>

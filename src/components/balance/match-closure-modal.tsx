@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ClipboardCheck, Loader2, ShieldCheck, X } from "lucide-react";
+import { ClipboardCheck, Loader2, X } from "lucide-react";
 
+import {
+  ChampionSelector,
+  type ChampionSelection,
+} from "@/components/balance/champion-selector";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { ClientPortal } from "@/components/ui/client-portal";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 type ClosureTeam = "blue" | "red";
@@ -30,23 +33,22 @@ type ClosureMatch = {
   match_players: ClosurePlayer[];
 };
 
+type ChampionDraft = ChampionSelection;
+
+type PlayerDraft = ChampionDraft & {
+  matchPlayerId: string;
+  kills: string;
+  deaths: string;
+  assists: string;
+};
+
 export type MatchClosurePayload = {
   matchId: string;
   winnerTeam: ClosureTeam;
   bansStatus: BansStatus;
-  blueBans: Array<{
-    championName: string;
-  }>;
-  redBans: Array<{
-    championName: string;
-  }>;
-  players: Array<{
-    matchPlayerId: string;
-    championName: string;
-    kills: string;
-    deaths: string;
-    assists: string;
-  }>;
+  blueBans: ChampionDraft[];
+  redBans: ChampionDraft[];
+  players: PlayerDraft[];
   notes: string;
 };
 
@@ -58,6 +60,15 @@ type MatchClosureModalProps = {
 };
 
 const roleOrder = ["TOP", "JUNGLE", "MID", "ADC", "SUPPORT"];
+
+function createEmptyChampion(): ChampionDraft {
+  return {
+    championId: null,
+    championKey: "",
+    championName: "",
+    championImageUrl: "",
+  };
+}
 
 function formatRole(role: string) {
   const labels: Record<string, string> = {
@@ -90,9 +101,11 @@ function sortByRole(players: ClosurePlayer[]) {
 }
 
 function createEmptyBans() {
-  return Array.from({ length: 5 }, () => ({
-    championName: "",
-  }));
+  return Array.from({ length: 5 }, () => createEmptyChampion());
+}
+
+function hasChampionSelected(champion: ChampionDraft) {
+  return champion.championName.trim().length > 0;
 }
 
 export function MatchClosureModal({
@@ -107,10 +120,10 @@ export function MatchClosureModal({
   const [redBans, setRedBans] = useState(createEmptyBans);
   const [notes, setNotes] = useState("");
 
-  const [players, setPlayers] = useState(() => {
+  const [players, setPlayers] = useState<PlayerDraft[]>(() => {
     return match.match_players.map((player) => ({
       matchPlayerId: player.id,
-      championName: "",
+      ...createEmptyChampion(),
       kills: "",
       deaths: "",
       assists: "",
@@ -130,13 +143,12 @@ export function MatchClosureModal({
   }, [match.match_players]);
 
   const allChampionPicksCompleted = players.every((player) => {
-    return player.championName.trim().length > 0;
+    return hasChampionSelected(player);
   });
 
   const recordedBansCompleted =
     bansStatus !== "recorded" ||
-    (blueBans.every((ban) => ban.championName.trim().length > 0) &&
-      redBans.every((ban) => ban.championName.trim().length > 0));
+    (blueBans.every(hasChampionSelected) && redBans.every(hasChampionSelected));
 
   const canSubmit =
     Boolean(winnerTeam) &&
@@ -146,7 +158,7 @@ export function MatchClosureModal({
 
   function updatePlayerDraft(
     matchPlayerId: string,
-    patch: Partial<(typeof players)[number]>,
+    patch: Partial<PlayerDraft>,
   ) {
     setPlayers((current) => {
       return current.map((player) => {
@@ -160,16 +172,25 @@ export function MatchClosureModal({
     });
   }
 
-  function updateBan(team: ClosureTeam, index: number, championName: string) {
+  function updatePlayerChampion(
+    matchPlayerId: string,
+    champion: ChampionSelection | null,
+  ) {
+    updatePlayerDraft(matchPlayerId, champion ?? createEmptyChampion());
+  }
+
+  function updateBan(
+    team: ClosureTeam,
+    index: number,
+    champion: ChampionSelection | null,
+  ) {
     const setter = team === "blue" ? setBlueBans : setRedBans;
 
     setter((current) => {
       return current.map((ban, currentIndex) => {
         if (currentIndex !== index) return ban;
 
-        return {
-          championName,
-        };
+        return champion ?? createEmptyChampion();
       });
     });
   }
@@ -191,7 +212,7 @@ export function MatchClosureModal({
   return (
     <ClientPortal>
       <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/72 px-4 py-6 backdrop-blur-md">
-        <div className="relative max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[1rem] border border-[#f0ed7e]/30 bg-[#101010] p-5 shadow-[0_2rem_6rem_rgba(0,0,0,0.55)] sm:p-6">
+        <div className="custom-scrollbar relative max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[1rem] border border-[#f0ed7e]/30 bg-[#101010] p-5 pr-6 shadow-[0_2rem_6rem_rgba(0,0,0,0.55)] sm:p-6 sm:pr-7">
           <button
             type="button"
             onClick={onClose}
@@ -211,8 +232,8 @@ export function MatchClosureModal({
             </h2>
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[#8a8a85]">
-              Estos datos alimentan el historial y el sistema de balanceo. Los
-              campeones usados son obligatorios; KDA y notas son opcionales.
+              Seleccioná campeones desde la base oficial para evitar errores de
+              carga. KDA y notas son opcionales.
             </p>
           </div>
 
@@ -307,6 +328,7 @@ export function MatchClosureModal({
               team="blue"
               players={bluePlayers}
               drafts={players}
+              onChampionChange={updatePlayerChampion}
               onChange={updatePlayerDraft}
             />
 
@@ -315,6 +337,7 @@ export function MatchClosureModal({
               team="red"
               players={redPlayers}
               drafts={players}
+              onChampionChange={updatePlayerChampion}
               onChange={updatePlayerDraft}
             />
           </div>
@@ -337,7 +360,7 @@ export function MatchClosureModal({
               {!winnerTeam ? (
                 <p>Seleccioná el ganador oficial.</p>
               ) : !allChampionPicksCompleted ? (
-                <p>Completá el campeón usado por los 10 jugadores.</p>
+                <p>Seleccioná el campeón usado por los 10 jugadores.</p>
               ) : !recordedBansCompleted ? (
                 <p>Cargá los 5 bans de cada equipo o marcá “No registrados”.</p>
               ) : (
@@ -375,8 +398,12 @@ function BanFields({
 }: {
   title: string;
   team: ClosureTeam;
-  bans: Array<{ championName: string }>;
-  onChange: (team: ClosureTeam, index: number, championName: string) => void;
+  bans: ChampionDraft[];
+  onChange: (
+    team: ClosureTeam,
+    index: number,
+    champion: ChampionSelection | null,
+  ) => void;
 }) {
   return (
     <div className="rounded-[0.75rem] border border-[#2a2929] bg-[#101010]/70 p-4">
@@ -386,12 +413,11 @@ function BanFields({
 
       <div className="grid gap-2">
         {bans.map((ban, index) => (
-          <Input
+          <ChampionSelector
             key={`${team}-ban-${index}`}
-            value={ban.championName}
-            onChange={(event) => onChange(team, index, event.target.value)}
-            placeholder={`Ban ${index + 1}`}
-            className="h-11 rounded-[0.5rem] border-[#2a2929] bg-[#151414] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
+            value={hasChampionSelected(ban) ? ban : null}
+            placeholder={`Buscar ban ${index + 1}...`}
+            onChange={(champion) => onChange(team, index, champion)}
           />
         ))}
       </div>
@@ -404,16 +430,18 @@ function PlayerTeamClosure({
   team,
   players,
   drafts,
+  onChampionChange,
   onChange,
 }: {
   title: string;
   team: ClosureTeam;
   players: ClosurePlayer[];
-  drafts: MatchClosurePayload["players"];
-  onChange: (
+  drafts: PlayerDraft[];
+  onChampionChange: (
     matchPlayerId: string,
-    patch: Partial<MatchClosurePayload["players"][number]>,
+    champion: ChampionSelection | null,
   ) => void;
+  onChange: (matchPlayerId: string, patch: Partial<PlayerDraft>) => void;
 }) {
   const isBlue = team === "blue";
 
@@ -441,6 +469,9 @@ function PlayerTeamClosure({
             return item.matchPlayerId === player.id;
           });
 
+          const selectedChampion =
+            draft && hasChampionSelected(draft) ? draft : null;
+
           return (
             <div
               key={player.id}
@@ -462,18 +493,13 @@ function PlayerTeamClosure({
               </div>
 
               <div className="grid gap-2 sm:grid-cols-[1fr_4.5rem_4.5rem_4.5rem]">
-                <Input
-                  value={draft?.championName ?? ""}
-                  onChange={(event) =>
-                    onChange(player.id, {
-                      championName: event.target.value,
-                    })
-                  }
-                  placeholder="Campeón usado"
-                  className="h-11 rounded-[0.5rem] border-[#2a2929] bg-[#151414] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
+                <ChampionSelector
+                  value={selectedChampion}
+                  placeholder="Buscar campeón..."
+                  onChange={(champion) => onChampionChange(player.id, champion)}
                 />
 
-                <Input
+                <input
                   value={draft?.kills ?? ""}
                   onChange={(event) =>
                     onChange(player.id, {
@@ -482,10 +508,10 @@ function PlayerTeamClosure({
                   }
                   placeholder="K"
                   inputMode="numeric"
-                  className="h-11 rounded-[0.5rem] border-[#2a2929] bg-[#151414] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
+                  className="h-11 rounded-[0.5rem] border border-[#2a2929] bg-[#151414] px-3 text-sm text-[#f5f5f3] outline-none placeholder:text-[#8a8a85] transition focus:border-[#75f0a0]"
                 />
 
-                <Input
+                <input
                   value={draft?.deaths ?? ""}
                   onChange={(event) =>
                     onChange(player.id, {
@@ -494,10 +520,10 @@ function PlayerTeamClosure({
                   }
                   placeholder="D"
                   inputMode="numeric"
-                  className="h-11 rounded-[0.5rem] border-[#2a2929] bg-[#151414] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
+                  className="h-11 rounded-[0.5rem] border border-[#2a2929] bg-[#151414] px-3 text-sm text-[#f5f5f3] outline-none placeholder:text-[#8a8a85] transition focus:border-[#75f0a0]"
                 />
 
-                <Input
+                <input
                   value={draft?.assists ?? ""}
                   onChange={(event) =>
                     onChange(player.id, {
@@ -506,7 +532,7 @@ function PlayerTeamClosure({
                   }
                   placeholder="A"
                   inputMode="numeric"
-                  className="h-11 rounded-[0.5rem] border-[#2a2929] bg-[#151414] text-sm text-[#f5f5f3] placeholder:text-[#8a8a85] focus-visible:border-[#75f0a0] focus-visible:ring-[#75f0a0]/20"
+                  className="h-11 rounded-[0.5rem] border border-[#2a2929] bg-[#151414] px-3 text-sm text-[#f5f5f3] outline-none placeholder:text-[#8a8a85] transition focus:border-[#75f0a0]"
                 />
               </div>
             </div>

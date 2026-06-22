@@ -2,16 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  CheckCircle2,
-  History,
-  Loader2,
-  ShieldCheck,
-  Trophy,
-} from "lucide-react";
+import { History, Loader2, Trophy } from "lucide-react";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
 
 type CompletedMatchesPanelProps = {
   activeTournamentId: string | null;
@@ -57,38 +50,10 @@ type CompletedMatchRecord = {
   match_result_submissions: CompletedMatchEvidence[];
 };
 
-const roleOrder = ["TOP", "JUNGLE", "MID", "ADC", "SUPPORT"];
-
-function formatRole(role: string) {
-  const labels: Record<string, string> = {
-    TOP: "Top",
-    JUNGLE: "Jungla",
-    MID: "Mid",
-    ADC: "ADC",
-    SUPPORT: "Soporte",
-  };
-
-  return labels[role] ?? role;
-}
-
 function formatTeamName(team: "blue" | "red" | null) {
   if (team === "blue") return "Equipo Azul";
   if (team === "red") return "Equipo Rojo";
   return "Sin ganador";
-}
-
-function getPlayerName(player: CompletedMatchPlayer) {
-  if (!player.profiles?.lol_nick) return "Jugador";
-
-  return `${player.profiles.lol_nick}#${player.profiles.lol_tagline ?? "-"}`;
-}
-
-function sortByRole(players: CompletedMatchPlayer[]) {
-  return players.slice().sort((a, b) => {
-    return (
-      roleOrder.indexOf(a.assigned_role) - roleOrder.indexOf(b.assigned_role)
-    );
-  });
 }
 
 function formatDateTime(value: string | null) {
@@ -182,10 +147,12 @@ export function CompletedMatchesPanel({
   }, [activeTournamentId, supabase]);
 
   useEffect(() => {
-    loadCompletedMatches();
+    const timeoutId = window.setTimeout(() => {
+      void loadCompletedMatches();
+    }, 0);
 
     function handleCompletedMatchesUpdated() {
-      loadCompletedMatches();
+      void loadCompletedMatches();
     }
 
     window.addEventListener(
@@ -195,6 +162,8 @@ export function CompletedMatchesPanel({
 
     if (!activeTournamentId) {
       return () => {
+        window.clearTimeout(timeoutId);
+
         window.removeEventListener(
           "riftbalance:completed-matches-updated",
           handleCompletedMatchesUpdated,
@@ -213,12 +182,14 @@ export function CompletedMatchesPanel({
           filter: `tournament_id=eq.${activeTournamentId}`,
         },
         () => {
-          loadCompletedMatches();
+          void loadCompletedMatches();
         },
       )
       .subscribe();
 
     return () => {
+      window.clearTimeout(timeoutId);
+
       window.removeEventListener(
         "riftbalance:completed-matches-updated",
         handleCompletedMatchesUpdated,
@@ -383,114 +354,6 @@ export function CompletedMatchesPanel({
         ) : null}
       </div>
     </section>
-  );
-}
-
-function HistoryTeamCard({
-  side,
-  winner,
-  players,
-}: {
-  side: "blue" | "red";
-  winner: boolean;
-  players: CompletedMatchPlayer[];
-}) {
-  const isBlue = side === "blue";
-
-  return (
-    <div
-      className={cn(
-        "rounded-[0.75rem] border p-4",
-        isBlue
-          ? "border-blue-400/20 bg-blue-400/8"
-          : "border-red-400/20 bg-red-400/8",
-      )}
-    >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p
-          className={cn(
-            "text-xs font-black uppercase tracking-[0.14em]",
-            isBlue ? "text-blue-200" : "text-red-200",
-          )}
-        >
-          {formatTeamName(side)}
-        </p>
-
-        {winner ? (
-          <span className="inline-flex items-center rounded-full border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-2 py-1 text-[0.62rem] font-black uppercase tracking-widest text-[#75f0a0]">
-            <CheckCircle2 className="mr-1 size-3" />
-            Ganador
-          </span>
-        ) : null}
-      </div>
-
-      <div className="grid gap-2">
-        {players.map((player) => {
-          const delta =
-            player.rating_delta != null
-              ? Number(player.rating_delta)
-              : player.rating_after != null
-                ? Number(player.rating_after) - Number(player.rating_before)
-                : 0;
-
-          const protectedLoss = Number(player.vale_visible_loss_protected ?? 0);
-
-          return (
-            <div
-              key={player.id}
-              className="flex items-center justify-between gap-3 rounded-[0.5rem] border border-[#2a2929] bg-[#101010]/70 px-3 py-2"
-            >
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-[#f0ed7e]">
-                  {formatRole(player.assigned_role)}
-                </p>
-
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-black text-[#f5f5f3]">
-                    {getPlayerName(player)}
-                  </p>
-
-                  {player.vale_used ? (
-                    <span className="rounded-full border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-widest text-[#75f0a0]">
-                      Vale
-                    </span>
-                  ) : null}
-                </div>
-
-                {protectedLoss > 0 ? (
-                  <p className="mt-1 text-xs text-[#75f0a0]">
-                    Pérdida protegida: {Math.round(protectedLoss)} pts
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="text-right">
-                <p
-                  className={cn(
-                    "text-sm font-black",
-                    delta > 0
-                      ? "text-[#75f0a0]"
-                      : delta < 0
-                        ? "text-red-300"
-                        : "text-[#8a8a85]",
-                  )}
-                >
-                  {delta > 0 ? "+" : ""}
-                  {Math.round(delta)}
-                </p>
-
-                <p className="text-[0.65rem] text-[#8a8a85]">
-                  {Math.round(Number(player.rating_before))}
-                  {player.rating_after != null
-                    ? ` → ${Math.round(Number(player.rating_after))}`
-                    : ""}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

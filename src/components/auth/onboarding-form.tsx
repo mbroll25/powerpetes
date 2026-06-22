@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ElementType } from "react";
+import Image from "next/image";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ElementType,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -68,12 +76,14 @@ type RiotPlayerResponse = {
   } | null;
 };
 
+const FIXED_POWERPETES_REGION = "LAS";
+
 const initialFormState: FormState = {
   firstName: "",
   lastName: "",
   lolNick: "",
   lolTagline: "",
-  region: "LAS",
+  region: FIXED_POWERPETES_REGION,
   currentTier: "",
   currentDivision: "",
   currentLp: "",
@@ -86,17 +96,6 @@ const initialFormState: FormState = {
   playstyle: "balanced",
   championPool: "medium",
 };
-
-const regions = [
-  { value: "LAS", label: "LAS" },
-  { value: "LAN", label: "LAN" },
-  { value: "BR", label: "BR" },
-  { value: "NA", label: "NA" },
-  { value: "EUW", label: "EUW" },
-  { value: "EUNE", label: "EUNE" },
-  { value: "KR", label: "KR" },
-  { value: "JP", label: "JP" },
-];
 
 const tiers = [
   { value: "UNRANKED", label: "Sin rango" },
@@ -237,8 +236,7 @@ export function OnboardingForm() {
     if (!form.lastName.trim()) return "Ingresá tu apellido.";
     if (!form.lolNick.trim()) return "Ingresá tu nick de League of Legends.";
     if (!form.lolTagline.trim())
-      return "Ingresá tu tagline. Ej: LAS, LAN, KR1.";
-    if (!form.region) return "Seleccioná tu región.";
+      return "Ingresá tu tagline de Riot. Ej: LAS, 1234, LAN.";
     if (!form.currentTier) return "Seleccioná tu elo actual.";
     if (!form.currentDivision) return "Seleccioná tu división actual.";
     if (!form.peakTier) return "Seleccioná tu mejor elo alcanzado.";
@@ -271,7 +269,7 @@ export function OnboardingForm() {
     const params = new URLSearchParams({
       gameName: form.lolNick.trim(),
       tagLine: form.lolTagline.trim(),
-      region: form.region,
+      region: FIXED_POWERPETES_REGION,
     });
 
     try {
@@ -313,7 +311,7 @@ export function OnboardingForm() {
     }
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setErrorMessage("");
@@ -338,7 +336,7 @@ export function OnboardingForm() {
       last_name: form.lastName.trim(),
       lol_nick: form.lolNick.trim(),
       lol_tagline: form.lolTagline.trim(),
-      region: form.region,
+      region: FIXED_POWERPETES_REGION,
       current_tier: form.currentTier,
       current_division: form.currentDivision,
       current_lp: form.currentLp ? Number(form.currentLp) : null,
@@ -422,21 +420,16 @@ export function OnboardingForm() {
             label="Tagline"
             value={form.lolTagline}
             onChange={(value) => updateField("lolTagline", value)}
-            placeholder="KR1"
+            placeholder="LAS"
           />
 
-          <SelectInput
-            label="Región / servidor"
-            value={form.region}
-            onChange={(value) => updateField("region", value)}
-            placeholder="Seleccioná región"
-            options={regions}
-          />
+          <LockedRegionField />
         </div>
 
         <div className="mt-5 flex flex-col gap-3 border-t border-[#2a2929] pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-[#8a8a85]">
-            Buscá la cuenta para completar automáticamente el Solo/Duo actual.
+            Buscá la cuenta en LAS para completar automáticamente el Solo/Duo
+            actual.
           </p>
 
           <Button
@@ -457,7 +450,10 @@ export function OnboardingForm() {
         ) : null}
 
         {riotPlayerData?.summoner ? (
-          <RiotVerifiedCard data={riotPlayerData} region={form.region} />
+          <RiotVerifiedCard
+            data={riotPlayerData}
+            region={FIXED_POWERPETES_REGION}
+          />
         ) : null}
       </FormCard>
 
@@ -600,7 +596,7 @@ export function OnboardingForm() {
   );
 }
 
-function FormCard({ children }: { children: React.ReactNode }) {
+function FormCard({ children }: { children: ReactNode }) {
   return (
     <section className="rounded-[0.75rem] border border-[#2a2929] bg-[#151414] p-5 sm:p-6">
       {children}
@@ -668,7 +664,7 @@ type SelectOption = {
 };
 
 type SelectInputProps = {
-  label: React.ReactNode;
+  label: ReactNode;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
@@ -710,9 +706,12 @@ function RiotVerifiedCard({
           <div className="flex min-w-0 items-center gap-4">
             <div className="relative shrink-0">
               {summoner.profileIconUrl ? (
-                <img
+                <Image
                   src={summoner.profileIconUrl}
                   alt="Icono de invocador"
+                  width={64}
+                  height={64}
+                  sizes="(min-width: 640px) 4rem, 3.5rem"
                   className="size-14 rounded-4xl border border-[#2a2929] object-cover shadow-[0_0.75rem_1.5rem_rgba(0,0,0,0.35)] sm:size-16"
                 />
               ) : (
@@ -816,6 +815,33 @@ function StatBox({
       <p className="text-base font-black leading-none text-[#f5f5f3]">
         {value}
       </p>
+    </div>
+  );
+}
+
+function LockedRegionField() {
+  return (
+    <div className="grid gap-2">
+      <Label className="flex h-5 items-center text-[#f5f5f3]">
+        Región / servidor
+      </Label>
+
+      <div className="flex h-13 items-center justify-between gap-3 rounded-[0.5rem] border border-[#2a2929] bg-[#101010] px-4">
+        <div className="min-w-0">
+          <p className="text-sm font-black text-[#f5f5f3]">
+            LAS — Latinoamérica Sur
+          </p>
+
+          <p className="mt-0.5 text-xs text-[#8a8a85]">
+            Región fija para la liga privada de PowerPetes.
+          </p>
+        </div>
+
+        <div className="inline-flex shrink-0 items-center rounded-full border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#75f0a0]">
+          <ShieldCheck className="mr-1 size-3" />
+          Bloqueada
+        </div>
+      </div>
     </div>
   );
 }
