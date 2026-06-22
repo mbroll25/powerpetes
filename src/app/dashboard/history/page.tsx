@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, History } from "lucide-react";
+import { ArrowLeft, History, Trophy } from "lucide-react";
 
 import DotField from "@/components/effects/dot-field";
 import { FullMatchHistoryPanel } from "@/components/balance/full-match-history-panel";
@@ -84,13 +84,23 @@ export default async function DashboardHistoryPage() {
             </p>
           </div>
 
-          <Link
-            href="/dashboard"
-            className="inline-flex h-12 items-center justify-center rounded-[0.5rem] border border-[#2a2929] bg-[#232121] px-5 text-xs font-black uppercase tracking-[0.12em] text-[#f5f5f3] transition-colors hover:bg-[#2b2b2b] hover:text-[#f0ed7e]"
-          >
-            <ArrowLeft className="mr-2 size-4" />
-            Volver al dashboard
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/dashboard/tournaments"
+              className="inline-flex h-12 items-center justify-center rounded-[0.5rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-5 text-xs font-black uppercase tracking-[0.12em] text-[#f0ed7e] transition-colors hover:bg-[#f0ed7e]/15"
+            >
+              <Trophy className="mr-2 size-4" />
+              Historial de torneos
+            </Link>
+
+            <Link
+              href="/dashboard"
+              className="inline-flex h-12 items-center justify-center rounded-[0.5rem] border border-[#2a2929] bg-[#232121] px-5 text-xs font-black uppercase tracking-[0.12em] text-[#f5f5f3] transition-colors hover:bg-[#2b2b2b] hover:text-[#f0ed7e]"
+            >
+              <ArrowLeft className="mr-2 size-4" />
+              Volver al dashboard
+            </Link>
+          </div>
         </header>
 
         <FullMatchHistoryPanel

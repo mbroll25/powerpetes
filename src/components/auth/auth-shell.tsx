@@ -50,7 +50,7 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
         glowColor="rgba(21,20,20,0.65)"
       />
 
-      <div className="pointer-events-none absolute bottom-0 right-64 z-8 hidden h-[90vh] w-[48vw] max-w-200 lg:block xl:right-80 xl:h-[94vh] xl:w-[50vw] 2xl:right-120">
+      <div className="pointer-events-none absolute bottom-0 right-64 z-8 hidden h-[90vh] w-[48vw] max-w-200 lg:block xl:right-72 xl:h-[94vh] xl:w-[50vw] 2xl:right-96 min-[1900px]:right-120">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_55%_52%,rgba(240,237,126,0.14),transparent_44%)] blur-2xl" />
 
         <Image
@@ -178,7 +178,7 @@ function MarketingTitle({ variant }: { variant: "desktop" | "mobile" }) {
   }
 
   return (
-    <h1 className="max-w-5xl text-[clamp(4.2rem,7.2vw,7.2rem)] font-extrabold uppercase leading-[0.92] tracking-[-0.035em] text-[#f5f5f3]">
+    <h1 className="max-w-5xl text-[clamp(3.55rem,5.8vw,5.8rem)] font-extrabold uppercase leading-[0.92] tracking-[-0.035em] text-[#f5f5f3] xl:text-[clamp(3.75rem,5.6vw,6.1rem)] 2xl:text-[clamp(4rem,6.5vw,7rem)] min-[1900px]:text-[clamp(4.2rem,7.2vw,7.2rem)]">
       <span className="block">Entrá al</span>
       <span className="block">
         <span className="text-[#f0ed7e]">lobby</span> y

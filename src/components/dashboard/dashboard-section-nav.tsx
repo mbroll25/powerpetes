@@ -8,11 +8,10 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Settings2,
+  Clock3,
   ShieldCheck,
   Swords,
   UserCircle,
-  UserRound,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -34,24 +33,19 @@ const dashboardNavItems: DashboardNavItem[] = [
     icon: Activity,
   },
   {
-    id: "riot-profile",
-    label: "Riot",
-    icon: UserRound,
-  },
-  {
     id: "match-generator",
     label: "Generador",
     icon: Swords,
   },
   {
+    id: "pending-matches",
+    label: "Activas",
+    icon: Clock3,
+  },
+  {
     id: "tournament-standings",
     label: "Tabla",
     icon: BarChart3,
-  },
-  {
-    id: "dashboard-admin",
-    label: "Admin",
-    icon: Settings2,
   },
 ];
 

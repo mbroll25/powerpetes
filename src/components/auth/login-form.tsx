@@ -9,6 +9,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAuthErrorMessage } from "@/lib/auth-error-messages";
 
 export function LoginForm() {
   const router = useRouter();
@@ -38,7 +39,11 @@ export function LoginForm() {
 
     if (error || !data.user) {
       setIsLoading(false);
-      setErrorMessage(error?.message ?? "No se pudo iniciar sesión.");
+      setErrorMessage(
+        error
+          ? getAuthErrorMessage(error)
+          : "No se pudo iniciar sesión. Intentá nuevamente.",
+      );
       return;
     }
 
@@ -51,9 +56,11 @@ export function LoginForm() {
     setIsLoading(false);
 
     if (profileError) {
-      setErrorMessage(profileError.message);
-      return;
-    }
+  setErrorMessage(
+    "No se pudo validar tu perfil. Intentá cerrar sesión e ingresar nuevamente.",
+  );
+  return;
+}
 
     if (!profile?.profile_completed) {
       router.replace("/onboarding");
