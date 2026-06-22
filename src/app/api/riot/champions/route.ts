@@ -13,7 +13,7 @@ type DDragonChampionResponse = {
   data: Record<string, DDragonChampion>;
 };
 
-export const revalidate = 60 * 60 * 24;
+export const revalidate = 3600;
 
 export async function GET() {
   try {

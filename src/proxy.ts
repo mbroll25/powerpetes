@@ -45,8 +45,22 @@ function redirectWithCookies(
   return redirectResponse;
 }
 
+function shouldBypassProxy(pathname: string) {
+  return (
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next/static") ||
+    pathname.startsWith("/_next/image") ||
+    pathname === "/favicon.ico" ||
+    /\.(svg|png|jpg|jpeg|gif|webp|mp4|ico)$/i.test(pathname)
+  );
+}
+
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  if (shouldBypassProxy(pathname)) {
+    return NextResponse.next();
+  }
 
   let response = NextResponse.next({
     request,
@@ -119,9 +133,3 @@ export async function proxy(request: NextRequest) {
 
   return response;
 }
-
-export const config = {
-  matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|ico)$).*)",
-  ],
-};
