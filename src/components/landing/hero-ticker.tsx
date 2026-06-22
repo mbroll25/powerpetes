@@ -4,10 +4,14 @@ import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 
 const tickerItems = [
-  "126 combinaciones posibles",
+  "liga privada competitiva",
   "10 jugadores por lobby",
-  "balance por elo y roles",
-  "partidas personalizadas 5v5",
+  "balance inteligente 5v5",
+  "elo, roles y rendimiento real",
+  "Riot ID verificado en LAS",
+  "vales para salvar la derrota",
+  "historial y estadísticas del torneo",
+  "podio de Powers Petes",
   "algoritmo transparente",
   "rio gallego una pasión",
 ];
