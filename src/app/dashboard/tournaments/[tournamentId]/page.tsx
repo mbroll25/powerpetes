@@ -160,6 +160,14 @@ export default async function TournamentDetailPage({
     redirect("/onboarding");
   }
 
+  const { data: roleData } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const isAdmin = roleData?.role === "owner" || roleData?.role === "admin";
+
   const { data } = await supabase
     .from("tournaments")
     .select(
@@ -419,7 +427,7 @@ export default async function TournamentDetailPage({
           )}
         </section>
 
-        <FullMatchHistoryPanel activeTournamentId={tournament.id} />
+        <FullMatchHistoryPanel activeTournamentId={tournament.id} isAdmin={isAdmin} />
       </section>
     </main>
   );

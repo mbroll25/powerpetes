@@ -43,6 +43,14 @@ export default async function DashboardHistoryPage() {
 
   const activeTournament = tournamentData as TournamentRow | null;
 
+  const { data: roleData } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const isAdmin = roleData?.role === "owner" || roleData?.role === "admin";
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#151414] px-4 py-8 text-[#f5f5f3] sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(240,237,126,0.08),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(117,240,160,0.055),transparent_24%)]" />
@@ -105,6 +113,7 @@ export default async function DashboardHistoryPage() {
 
         <FullMatchHistoryPanel
           activeTournamentId={activeTournament?.id ?? null}
+          isAdmin={isAdmin}
         />
       </section>
     </main>

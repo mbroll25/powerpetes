@@ -21,6 +21,8 @@ import {
   Loader2,
   Medal,
   Paperclip,
+  Pencil,
+  Save,
   Search,
   ShieldCheck,
   Sparkles,
@@ -36,6 +38,7 @@ import { cn } from "@/lib/utils";
 
 type FullMatchHistoryPanelProps = {
   activeTournamentId: string | null;
+  isAdmin?: boolean;
 };
 
 type MatchPlayerProfile = {
@@ -618,8 +621,45 @@ function matchHasScreenshot(match: HistoryMatchRecord) {
   });
 }
 
+type KdaField = "kills" | "deaths" | "assists";
+
+type KdaDraft = {
+  kills: string;
+  deaths: string;
+  assists: string;
+};
+
+type KdaDraftByPlayerId = Record<string, KdaDraft>;
+
+function getStatDraftValue(value: number | string | null) {
+  if (value == null) return "";
+
+  return String(value);
+}
+
+function createKdaDraftFromMatch(match: HistoryMatchRecord) {
+  return match.match_players.reduce<KdaDraftByPlayerId>((drafts, player) => {
+    drafts[player.id] = {
+      kills: getStatDraftValue(player.kills),
+      deaths: getStatDraftValue(player.deaths),
+      assists: getStatDraftValue(player.assists),
+    };
+
+    return drafts;
+  }, {});
+}
+
+function parseKdaDraftValue(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) return null;
+
+  return Number(trimmedValue);
+}
+
 export function FullMatchHistoryPanel({
   activeTournamentId,
+  isAdmin = false,
 }: FullMatchHistoryPanelProps) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
@@ -646,6 +686,13 @@ export function FullMatchHistoryPanel({
   const [uploadingEvidenceMatchId, setUploadingEvidenceMatchId] = useState<
     string | null
   >(null);
+
+  const [editingKdaMatchId, setEditingKdaMatchId] = useState<string | null>(
+    null,
+  );
+  const [savingKdaMatchId, setSavingKdaMatchId] = useState<string | null>(null);
+  const [kdaDraftByPlayerId, setKdaDraftByPlayerId] =
+    useState<KdaDraftByPlayerId>({});
 
   const loadMatches = useCallback(async () => {
     setMessage("");
@@ -885,6 +932,82 @@ match_bans (
     await loadMatches();
   }
 
+  function handleStartKdaEdit(match: HistoryMatchRecord) {
+    setMessage("");
+    setEditingKdaMatchId(match.id);
+    setKdaDraftByPlayerId(createKdaDraftFromMatch(match));
+  }
+
+  function handleCancelKdaEdit() {
+    setEditingKdaMatchId(null);
+    setKdaDraftByPlayerId({});
+  }
+
+  function handleKdaDraftChange(
+    matchPlayerId: string,
+    field: KdaField,
+    value: string,
+  ) {
+    const sanitizedValue = value.replace(/[^\d]/g, "");
+
+    setKdaDraftByPlayerId((current) => {
+      const currentDraft = current[matchPlayerId] ?? {
+        kills: "",
+        deaths: "",
+        assists: "",
+      };
+
+      return {
+        ...current,
+        [matchPlayerId]: {
+          ...currentDraft,
+          [field]: sanitizedValue,
+        },
+      };
+    });
+  }
+
+  async function handleSaveKda(match: HistoryMatchRecord) {
+    setMessage("");
+    setSavingKdaMatchId(match.id);
+
+    const playersPayload = match.match_players.map((player) => {
+      const draft = kdaDraftByPlayerId[player.id] ?? {
+        kills: "",
+        deaths: "",
+        assists: "",
+      };
+
+      return {
+        match_player_id: player.id,
+        kills: parseKdaDraftValue(draft.kills),
+        deaths: parseKdaDraftValue(draft.deaths),
+        assists: parseKdaDraftValue(draft.assists),
+      };
+    });
+
+    const { error } = await supabase.rpc("update_match_manual_kda", {
+      p_match_id: match.id,
+      p_players: playersPayload,
+    });
+
+    setSavingKdaMatchId(null);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setEditingKdaMatchId(null);
+    setKdaDraftByPlayerId({});
+
+    setMessage(
+      `KDA actualizado correctamente en la partida #${match.match_number}.`,
+    );
+
+    await loadMatches();
+  }
+
   if (!activeTournamentId) {
     return (
       <div className="rounded-[0.75rem] border border-[#2a2929] bg-[#101010]/92 p-6">
@@ -1093,6 +1216,21 @@ match_bans (
                         <MatchFeaturedPlayerCard
                           players={[...bluePlayers, ...redPlayers]}
                         />
+
+                        {isAdmin ? (
+                          <KdaAdminEditor
+                            match={match}
+                            bluePlayers={bluePlayers}
+                            redPlayers={redPlayers}
+                            isEditing={editingKdaMatchId === match.id}
+                            isSaving={savingKdaMatchId === match.id}
+                            drafts={kdaDraftByPlayerId}
+                            onStart={() => handleStartKdaEdit(match)}
+                            onCancel={handleCancelKdaEdit}
+                            onChange={handleKdaDraftChange}
+                            onSave={() => handleSaveKda(match)}
+                          />
+                        ) : null}
 
                         <div className="grid gap-4 xl:grid-cols-2">
                           <HistoryTeamCard
@@ -2334,6 +2472,242 @@ function HistoryBansCard({
         </p>
       )}
     </div>
+  );
+}
+
+function KdaAdminEditor({
+  match,
+  bluePlayers,
+  redPlayers,
+  isEditing,
+  isSaving,
+  drafts,
+  onStart,
+  onCancel,
+  onChange,
+  onSave,
+}: {
+  match: HistoryMatchRecord;
+  bluePlayers: HistoryMatchPlayer[];
+  redPlayers: HistoryMatchPlayer[];
+  isEditing: boolean;
+  isSaving: boolean;
+  drafts: KdaDraftByPlayerId;
+  onStart: () => void;
+  onCancel: () => void;
+  onChange: (matchPlayerId: string, field: KdaField, value: string) => void;
+  onSave: () => void;
+}) {
+  if (!isEditing) {
+    return (
+      <div className="mb-4 rounded-[0.75rem] border border-[#f0ed7e]/25 bg-[#f0ed7e]/8 p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <Pencil className="size-4 text-[#f0ed7e]" />
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+                Edición admin
+              </p>
+            </div>
+
+            <p className="max-w-3xl text-sm leading-6 text-[#c9c9c4]">
+              Como admin podés corregir o cargar el KDA manual de los jugadores
+              sin modificar el ganador, los puntos ni el resultado de la
+              partida.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            onClick={onStart}
+            className="h-11 rounded-[0.5rem] bg-[#f0ed7e] px-5 text-xs font-black uppercase tracking-[0.14em] text-[#151414] hover:bg-[#d8d46d]"
+          >
+            <Pencil className="mr-2 size-4" />
+            Editar KDA
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4 rounded-[0.75rem] border border-[#f0ed7e]/30 bg-[#101010]/80 p-4">
+      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Pencil className="size-4 text-[#f0ed7e]" />
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#f0ed7e]">
+              Editando KDA · Partida #{match.match_number}
+            </p>
+          </div>
+
+          <p className="max-w-3xl text-sm leading-6 text-[#8a8a85]">
+            Cargá kills, deaths y assists de cada jugador. Los campos vacíos se
+            guardan como sin dato.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            type="button"
+            disabled={isSaving}
+            onClick={onCancel}
+            className="h-11 rounded-[0.5rem] border border-[#2a2929] bg-[#151414] px-5 text-xs font-black uppercase tracking-[0.14em] text-[#f5f5f3] hover:border-red-400/35 hover:bg-red-400/10 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="mr-2 size-4" />
+            Cancelar
+          </Button>
+
+          <Button
+            type="button"
+            disabled={isSaving}
+            onClick={onSave}
+            className="h-11 rounded-[0.5rem] bg-[#75f0a0] px-5 text-xs font-black uppercase tracking-[0.14em] text-[#151414] hover:bg-[#63d98a] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSaving ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 size-4" />
+            )}
+            {isSaving ? "Guardando..." : "Guardar KDA"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <KdaTeamEditor
+          title="Equipo Azul"
+          side="blue"
+          players={bluePlayers}
+          drafts={drafts}
+          onChange={onChange}
+        />
+
+        <KdaTeamEditor
+          title="Equipo Rojo"
+          side="red"
+          players={redPlayers}
+          drafts={drafts}
+          onChange={onChange}
+        />
+      </div>
+    </div>
+  );
+}
+
+function KdaTeamEditor({
+  title,
+  side,
+  players,
+  drafts,
+  onChange,
+}: {
+  title: string;
+  side: "blue" | "red";
+  players: HistoryMatchPlayer[];
+  drafts: KdaDraftByPlayerId;
+  onChange: (matchPlayerId: string, field: KdaField, value: string) => void;
+}) {
+  const isBlue = side === "blue";
+
+  return (
+    <div
+      className={cn(
+        "rounded-[0.75rem] border p-4",
+        isBlue
+          ? "border-blue-400/20 bg-blue-400/8"
+          : "border-red-400/20 bg-red-400/8",
+      )}
+    >
+      <p
+        className={cn(
+          "mb-3 text-xs font-black uppercase tracking-[0.14em]",
+          isBlue ? "text-blue-200" : "text-red-200",
+        )}
+      >
+        {title}
+      </p>
+
+      <div className="grid gap-3">
+        {players.map((player) => {
+          const draft = drafts[player.id] ?? {
+            kills: "",
+            deaths: "",
+            assists: "",
+          };
+
+          return (
+            <div
+              key={player.id}
+              className="rounded-4xl border border-[#2a2929] bg-[#101010]/75 p-3"
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.12em] text-[#f0ed7e]">
+                    {formatRole(player.assigned_role)}
+                  </p>
+
+                  <p className="mt-1 truncate text-sm font-black text-[#f5f5f3]">
+                    {getPlayerName(player)}
+                  </p>
+                </div>
+
+                <ChampionMiniCard
+                  championName={player.champion_name}
+                  championImageUrl={player.champion_image_url}
+                />
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                <KdaInput
+                  label="Kills"
+                  value={draft.kills}
+                  onChange={(value) => onChange(player.id, "kills", value)}
+                />
+
+                <KdaInput
+                  label="Deaths"
+                  value={draft.deaths}
+                  onChange={(value) => onChange(player.id, "deaths", value)}
+                />
+
+                <KdaInput
+                  label="Assists"
+                  value={draft.assists}
+                  onChange={(value) => onChange(player.id, "assists", value)}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function KdaInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8a8a85]">
+        {label}
+      </span>
+
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        inputMode="numeric"
+        placeholder="0"
+        className="h-11 rounded-[0.5rem] border border-[#2a2929] bg-[#151414] px-3 text-sm font-black text-[#f5f5f3] outline-none transition placeholder:text-[#555] focus:border-[#75f0a0]"
+      />
+    </label>
   );
 }
 
