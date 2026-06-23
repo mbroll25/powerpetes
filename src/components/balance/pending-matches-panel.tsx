@@ -185,7 +185,7 @@ function createEvidenceStoragePath({
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  return `${tournamentId}/${matchId}/${userId}-${uniqueId}.${extension}`;
+  return `${userId}/${tournamentId}/${matchId}/evidence-${uniqueId}.${extension}`;
 }
 
 export function PendingMatchesPanel({
