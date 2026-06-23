@@ -2658,7 +2658,7 @@ function KdaTeamEditor({
                 />
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid min-w-0 gap-2 sm:grid-cols-3">
                 <KdaInput
                   label="Kills"
                   value={draft.kills}
@@ -2695,8 +2695,8 @@ function KdaInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1.5">
-      <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8a8a85]">
+    <label className="grid min-w-0 gap-1.5">
+      <span className="truncate text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8a8a85]">
         {label}
       </span>
 
@@ -2705,7 +2705,7 @@ function KdaInput({
         onChange={(event) => onChange(event.target.value)}
         inputMode="numeric"
         placeholder="0"
-        className="h-11 rounded-[0.5rem] border border-[#2a2929] bg-[#151414] px-3 text-sm font-black text-[#f5f5f3] outline-none transition placeholder:text-[#555] focus:border-[#75f0a0]"
+        className="h-11 w-full min-w-0 rounded-[0.5rem] border border-[#2a2929] bg-[#151414] px-3 text-sm font-black text-[#f5f5f3] outline-none transition placeholder:text-[#555] focus:border-[#75f0a0]"
       />
     </label>
   );
