@@ -294,10 +294,6 @@ function formatTeamKda(players: HistoryMatchPlayer[]) {
   return `${totals.kills} / ${totals.deaths} / ${totals.assists}`;
 }
 
-function getValePlayers(match: HistoryMatchRecord) {
-  return match.match_players.filter((player) => player.vale_used);
-}
-
 function getPlayerPerformanceScore(player: HistoryMatchPlayer) {
   const hasStats =
     player.kills != null || player.deaths != null || player.assists != null;
@@ -1290,8 +1286,6 @@ match_bans (
                           redPlayers={redPlayers}
                           evidence={evidence}
                         />
-
-                        <MatchValeUsageSummary match={match} />
 
                         <MatchFeaturedPlayerCard
                           players={[...bluePlayers, ...redPlayers]}
@@ -2364,6 +2358,8 @@ function HistoryTeamCard({
           const delta = getPlayerDelta(player);
           const protectedLoss = Number(player.vale_visible_loss_protected ?? 0);
 
+          const playerUsedVale = Boolean(player.vale_used);
+
           return (
             <div
               key={player.id}
@@ -2381,6 +2377,30 @@ function HistoryTeamCard({
                     <p className="truncate text-sm font-black text-[#f5f5f3]">
                       {getPlayerName(player)}
                     </p>
+
+                    {playerUsedVale ? (
+                      <span className="rounded-full border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-widest text-[#75f0a0]">
+                        Vale usado
+                      </span>
+                    ) : null}
+
+                    {playerUsedVale && protectedLoss > 0 ? (
+                      <span className="rounded-full border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-widest text-[#f0ed7e]">
+                        Protegió {Math.round(protectedLoss)} pts
+                      </span>
+                    ) : null}
+
+                    {playerUsedVale && protectedLoss === 0 && winner ? (
+                      <span className="rounded-full border border-[#2a2929] bg-[#151414] px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-widest text-[#8a8a85]">
+                        Ganó con vale
+                      </span>
+                    ) : null}
+
+                    {playerUsedVale && protectedLoss === 0 && !winner ? (
+                      <span className="rounded-full border border-red-400/25 bg-red-400/10 px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-widest text-red-200">
+                        Revisar vale
+                      </span>
+                    ) : null}
 
                     {shouldShowPlayedAs(player) ? (
                       <span className="rounded-full border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-widest text-[#f0ed7e]">
@@ -2438,101 +2458,6 @@ function HistoryTeamCard({
                     ? ` → ${Math.round(Number(player.rating_after))}`
                     : ""}
                 </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MatchValeUsageSummary({ match }: { match: HistoryMatchRecord }) {
-  const valePlayers = getValePlayers(match);
-
-  if (valePlayers.length === 0) {
-    return (
-      <div className="mb-4 rounded-[0.75rem] border border-[#2a2929] bg-[#101010]/70 p-4">
-        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#8a8a85]">
-          Vales usados
-        </p>
-
-        <p className="mt-2 text-sm leading-6 text-[#c9c9c4]">
-          Ningún jugador utilizó vale en esta partida.
-        </p>
-      </div>
-    );
-  }
-
-  const protectedPlayers = valePlayers.filter((player) => {
-    return Number(player.vale_visible_loss_protected ?? 0) > 0;
-  });
-
-  return (
-    <div className="mb-4 rounded-[0.75rem] border border-[#75f0a0]/25 bg-[#75f0a0]/8 p-4">
-      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#75f0a0]">
-            Vales usados en esta partida
-          </p>
-
-          <p className="mt-1 text-sm leading-6 text-[#c9c9c4]">
-            {valePlayers.length}/10 jugadores activaron vale.
-          </p>
-        </div>
-
-        <div className="w-fit rounded-full border border-[#75f0a0]/25 bg-[#101010]/70 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#75f0a0]">
-          {protectedPlayers.length > 0
-            ? `${protectedPlayers.length} con pérdida protegida`
-            : "Sin pérdidas protegidas"}
-        </div>
-      </div>
-
-      <div className="grid gap-2">
-        {valePlayers.map((player) => {
-          const protectedLoss = Number(player.vale_visible_loss_protected ?? 0);
-
-          const playerWon =
-            match.winner_team != null && player.team === match.winner_team;
-
-          const visibleDelta = Math.round(getPlayerDelta(player));
-
-          return (
-            <div
-              key={player.id}
-              className="rounded-[0.6rem] border border-[#2a2929] bg-[#101010]/75 px-3 py-3"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-black text-[#f5f5f3]">
-                    {getPlayerName(player)}
-                  </p>
-
-                  <p className="mt-1 text-xs text-[#8a8a85]">
-                    {formatTeamName(player.team)} ·{" "}
-                    {formatRole(player.assigned_role)}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full border border-[#75f0a0]/25 bg-[#75f0a0]/10 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-widest text-[#75f0a0]">
-                    Vale usado
-                  </span>
-
-                  {protectedLoss > 0 ? (
-                    <span className="rounded-full border border-[#f0ed7e]/25 bg-[#f0ed7e]/10 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-widest text-[#f0ed7e]">
-                      Protegió {Math.round(protectedLoss)} pts
-                    </span>
-                  ) : playerWon ? (
-                    <span className="rounded-full border border-[#2a2929] bg-[#151414] px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-widest text-[#8a8a85]">
-                      Ganó, no necesitó protección
-                    </span>
-                  ) : (
-                    <span className="rounded-full border border-red-400/25 bg-red-400/10 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-widest text-red-200">
-                      Revisar protección · {visibleDelta} pts
-                    </span>
-                  )}
-                </div>
               </div>
             </div>
           );
