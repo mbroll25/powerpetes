@@ -97,9 +97,10 @@ export default async function DashboardHistoryPage() {
       const bWinrate = getWinrate(b.wins, b.losses);
 
       return (
+        Number(b.current_rating) - Number(a.current_rating) ||
         b.wins - a.wins ||
         bWinrate - aWinrate ||
-        Number(b.current_rating) - Number(a.current_rating)
+        b.matches_played - a.matches_played
       );
     }) ?? [];
 
