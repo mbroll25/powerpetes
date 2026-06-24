@@ -19,6 +19,7 @@ export type BalancePlayer = {
 
   primaryRole: Role | null;
   secondaryRole: Role | null;
+  forbiddenRole: Role | null;
 
   championPool: ChampionPool | null;
   playstyle: Playstyle | null;
@@ -103,6 +104,7 @@ export const POWERPETES_BALANCE_RULES = [
   "A medida que un jugador acumula partidas dentro de PowerPetes, el historial interno pasa a tener más peso que Riot.",
   "El sistema no mira solo el rating total: también compara Top contra Top, Jungla contra Jungla, Mid contra Mid, ADC contra ADC y Soporte contra Soporte.",
   "Jugar en rol principal no tiene penalización. Jugar en rol secundario tiene una penalización leve. Jugar fuera de rol tiene una penalización mayor.",
+  "La línea prohibida de cada jugador es una restricción absoluta: el sistema nunca debe asignar esa línea.",
   "El sistema intenta que ambos equipos tengan una probabilidad de victoria lo más cercana posible al 50%.",
   "Después de cada partida cerrada, PowerPetes actualiza el rating interno según el resultado y la dificultad del enfrentamiento.",
 ] as const;
@@ -334,10 +336,22 @@ function calculateRoleRatingAdjustment(
   return clamp((roleRating - referenceRating) * 0.35, -70, 70);
 }
 
+function isForbiddenRoleAssignment(player: BalancePlayer, assignedRole: Role) {
+  return player.forbiddenRole === assignedRole;
+}
+
 function assignPlayerToRole(
   player: BalancePlayer,
   assignedRole: Role,
 ): AssignedPlayer {
+  if (isForbiddenRoleAssignment(player, assignedRole)) {
+    throw new Error(
+      `${player.displayName} no puede ser asignado a ${formatRole(
+        assignedRole,
+      )} porque es su línea prohibida.`,
+    );
+  }
+
   const profileRating = calculateProfileRating(player);
   const effectiveRating = calculateEffectiveRating(player);
   const rolePenalty = calculateRolePenalty(player, assignedRole);
@@ -431,7 +445,21 @@ function buildTeamRoleCandidates(
   side: TeamSide,
   players: BalancePlayer[],
 ): BalancedTeam[] {
-  return ROLE_PERMUTATIONS.map((rolePermutation) => {
+  return ROLE_PERMUTATIONS.flatMap((rolePermutation) => {
+    const hasForbiddenAssignment = players.some((player, index) => {
+      const assignedRole = rolePermutation[index];
+
+      if (!assignedRole) {
+        throw new Error("Invalid role permutation.");
+      }
+
+      return isForbiddenRoleAssignment(player, assignedRole);
+    });
+
+    if (hasForbiddenAssignment) {
+      return [];
+    }
+
     const assignedPlayers = players.map((player, index) => {
       const assignedRole = rolePermutation[index];
 
@@ -442,7 +470,7 @@ function buildTeamRoleCandidates(
       return assignPlayerToRole(player, assignedRole);
     });
 
-    return buildTeamFromAssignment(side, assignedPlayers);
+    return [buildTeamFromAssignment(side, assignedPlayers)];
   });
 }
 
@@ -630,6 +658,10 @@ function buildExplanation(result: Omit<BalanceResult, "explanation">) {
   );
 
   explanations.push(
+    "Se descartaron automáticamente todas las asignaciones que enviaban a un jugador a su línea prohibida.",
+  );
+
+  explanations.push(
     `El score de balance final fue ${result.balanceScore}/100. Cuanto más cerca de 100, más pareja debería sentirse la partida.`,
   );
 
@@ -719,6 +751,18 @@ export function generateBalancedTeams(players: BalancePlayer[]): BalanceResult {
     throw new Error("generateBalancedTeams requires exactly 10 players.");
   }
 
+  const playersWithoutForbiddenRole = players.filter((player) => {
+    return !player.forbiddenRole;
+  });
+
+  if (playersWithoutForbiddenRole.length > 0) {
+    throw new Error(
+      `No se puede generar la partida. Falta configurar la línea prohibida de: ${playersWithoutForbiddenRole
+        .map((player) => player.displayName)
+        .join(", ")}.`,
+    );
+  }
+
   const [firstPlayer, ...remainingPlayers] = players as [
     BalancePlayer,
     ...BalancePlayer[],
@@ -767,7 +811,9 @@ export function generateBalancedTeams(players: BalancePlayer[]): BalanceResult {
   }
 
   if (!bestResult) {
-    throw new Error("Could not generate balanced teams.");
+    throw new Error(
+      "No se pudo generar una partida respetando las líneas prohibidas de los jugadores seleccionados.",
+    );
   }
 
   const finalResult = {

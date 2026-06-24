@@ -17,6 +17,7 @@ import { DashboardMotion } from "@/components/dashboard/dashboard-motion";
 import { MatchGeneratorPanel } from "@/components/balance/match-generator-panel";
 import { PendingMatchesPanel } from "@/components/balance/pending-matches-panel";
 import { DashboardResponsiveShell } from "@/components/dashboard/dashboard-section-nav";
+import { ForbiddenRoleRequiredModal } from "@/components/auth/forbidden-role-required-modal";
 
 type ProfileRow = {
   first_name: string | null;
@@ -134,6 +135,9 @@ export default async function DashboardPage() {
     current_division,
     current_lp,
     primary_role,
+    secondary_role,
+    forbidden_role,
+    forbidden_role_completed_at,
     riot_profile_icon_id,
     riot_summoner_level,
     solo_queue_wins,
@@ -215,6 +219,9 @@ export default async function DashboardPage() {
 
   const riotVerified = Boolean(profile?.riot_verified_at);
 
+  const forbiddenRoleRequired =
+    !profile?.forbidden_role || !profile?.forbidden_role_completed_at;
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#151414] px-4 py-8 text-[#f5f5f3] sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(240,237,126,0.08),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(117,240,160,0.055),transparent_24%)]" />
@@ -234,6 +241,13 @@ export default async function DashboardPage() {
         gradientTo="rgba(240,237,126,0.10)"
         glowColor="rgba(21,20,20,0.55)"
       />
+
+      {forbiddenRoleRequired ? (
+        <ForbiddenRoleRequiredModal
+          primaryRole={profile?.primary_role ?? null}
+          secondaryRole={profile?.secondary_role ?? null}
+        />
+      ) : null}
 
       <DashboardMotion>
         <DashboardResponsiveShell>

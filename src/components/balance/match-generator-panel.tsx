@@ -51,6 +51,7 @@ type PlayerProfileRecord = {
   peak_division: string | null;
   primary_role: string | null;
   secondary_role: string | null;
+  forbidden_role: string | null;
   champion_pool: string | null;
   playstyle: string | null;
   solo_queue_wins: number | null;
@@ -241,6 +242,7 @@ function buildBalancePlayer(
 
     primaryRole: normalizeRole(profile?.primary_role ?? null),
     secondaryRole: normalizeRole(profile?.secondary_role ?? null),
+    forbiddenRole: normalizeRole(profile?.forbidden_role ?? null),
 
     championPool: normalizeChampionPool(profile?.champion_pool ?? null),
     playstyle: normalizePlaystyle(profile?.playstyle ?? null),
@@ -368,6 +370,7 @@ export function MatchGeneratorPanel({
               peak_division,
               primary_role,
               secondary_role,
+              forbidden_role,
               champion_pool,
               playstyle,
               solo_queue_wins,
@@ -535,6 +538,21 @@ export function MatchGeneratorPanel({
 
     if (selectedPlayers.length !== 10) {
       setMessage("Seleccioná exactamente 10 jugadores para generar equipos.");
+      return;
+    }
+
+    const playersWithoutForbiddenRole = selectedPlayers.filter((player) => {
+      return !normalizeRole(player.profiles?.forbidden_role ?? null);
+    });
+
+    if (playersWithoutForbiddenRole.length > 0) {
+      const playerNames = playersWithoutForbiddenRole
+        .map((player) => getDisplayName(player.profiles))
+        .join(", ");
+
+      setMessage(
+        `No se puede generar la partida. Estos jugadores todavía no configuraron su línea prohibida: ${playerNames}.`,
+      );
       return;
     }
 
@@ -880,7 +898,9 @@ export function MatchGeneratorPanel({
 
                         <p className="mt-1 text-xs text-[#8a8a85]">
                           {formatNullableRole(profile?.primary_role ?? null)} ·{" "}
-                          {Math.round(Number(player.current_rating))} rating
+                          {Math.round(Number(player.current_rating))} rating ·
+                          Prohibida:{" "}
+                          {formatNullableRole(profile?.forbidden_role ?? null)}
                         </p>
                       </div>
 
@@ -977,6 +997,13 @@ export function MatchGeneratorPanel({
                           profile?.current_division ?? null,
                         )}{" "}
                         · {formatNullableRole(profile?.primary_role ?? null)}
+                      </p>
+
+                      <p className="mt-1 text-[0.68rem] font-bold text-[#8a8a85]">
+                        Prohibida:{" "}
+                        <span className="text-red-200">
+                          {formatNullableRole(profile?.forbidden_role ?? null)}
+                        </span>
                       </p>
                     </div>
 

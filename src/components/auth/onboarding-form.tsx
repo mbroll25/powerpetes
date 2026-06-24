@@ -50,6 +50,7 @@ type FormState = {
   peakDivision: string;
   primaryRole: string;
   secondaryRole: string;
+  forbiddenRole: string;
   mainChampions: string[];
   secondaryChampions: string[];
   playstyle: string;
@@ -91,6 +92,7 @@ const initialFormState: FormState = {
   peakDivision: "",
   primaryRole: "",
   secondaryRole: "",
+  forbiddenRole: "",
   mainChampions: [],
   secondaryChampions: [],
   playstyle: "balanced",
@@ -198,6 +200,14 @@ export function OnboardingForm() {
   const [riotPlayerData, setRiotPlayerData] =
     useState<RiotPlayerResponse | null>(null);
 
+  const forbiddenRoleOptions = useMemo(() => {
+    return roles.filter((role) => {
+      return (
+        role.value !== form.primaryRole && role.value !== form.secondaryRole
+      );
+    });
+  }, [form.primaryRole, form.secondaryRole]);
+
   useEffect(() => {
     async function checkSession() {
       const { data } = await supabase.auth.getUser();
@@ -215,10 +225,23 @@ export function OnboardingForm() {
   }, [router, supabase]);
 
   function updateField(field: keyof FormState, value: string) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setForm((current) => {
+      const next = {
+        ...current,
+        [field]: value,
+      };
+
+      if (
+        (field === "primaryRole" || field === "secondaryRole") &&
+        next.forbiddenRole &&
+        (next.forbiddenRole === next.primaryRole ||
+          next.forbiddenRole === next.secondaryRole)
+      ) {
+        next.forbiddenRole = "";
+      }
+
+      return next;
+    });
   }
 
   function updateChampionField(
@@ -246,6 +269,17 @@ export function OnboardingForm() {
 
     if (form.primaryRole === form.secondaryRole) {
       return "El rol principal y secundario no pueden ser iguales.";
+    }
+
+    if (!form.forbiddenRole) {
+      return "Seleccioná tu línea prohibida.";
+    }
+
+    if (
+      form.forbiddenRole === form.primaryRole ||
+      form.forbiddenRole === form.secondaryRole
+    ) {
+      return "La línea prohibida no puede ser igual a tu rol principal ni a tu rol secundario.";
     }
 
     if (form.mainChampions.length < 2) {
@@ -344,6 +378,8 @@ export function OnboardingForm() {
       peak_division: form.peakDivision,
       primary_role: form.primaryRole,
       secondary_role: form.secondaryRole,
+      forbidden_role: form.forbiddenRole,
+      forbidden_role_completed_at: new Date().toISOString(),
       main_champions: form.mainChampions,
       secondary_champions: form.secondaryChampions,
       playstyle: form.playstyle,
@@ -398,6 +434,26 @@ export function OnboardingForm() {
             onChange={(value) => updateField("lastName", value)}
             placeholder="Dib"
           />
+        </div>
+
+        <div className="mt-5 rounded-[0.75rem] border border-[#f0ed7e]/20 bg-[#101010]/70 p-4">
+          <SelectInput
+            label={
+              <>
+                Línea prohibida
+                <InfoTooltip text="Elegí una sola línea que no querés jugar nunca. El generador de partidas no debería asignarte esta línea." />
+              </>
+            }
+            value={form.forbiddenRole}
+            onChange={(value) => updateField("forbiddenRole", value)}
+            placeholder="Elegí la línea que no querés jugar"
+            options={forbiddenRoleOptions}
+          />
+
+          <p className="mt-3 text-xs leading-5 text-[#8a8a85]">
+            Esta elección es obligatoria y será respetada por el balanceador. No
+            puede coincidir con tu rol principal ni con tu rol secundario.
+          </p>
         </div>
       </FormCard>
 
