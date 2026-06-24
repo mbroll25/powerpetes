@@ -132,7 +132,7 @@ export function ForbiddenRoleRequiredModal({
 
   return (
     <div className="fixed inset-0 z-9999 flex items-center justify-center overflow-hidden bg-black/76 px-4 py-6 backdrop-blur-md">
-      <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden h-88 w-88 select-none md:block lg:h-[30rem] lg:w-[30rem] xl:h-[34rem] xl:w-[34rem]">
+      <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden h-88 w-88 select-none md:block lg:h-120 lg:w-120 xl:h-136 xl:w-136">
         <Image
           src="/baneodelineas.png"
           alt=""
@@ -161,6 +161,7 @@ export function ForbiddenRoleRequiredModal({
           </h2>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#8a8a85]">
+            Dado que hay players que lele cola, prefieren que se implemente la LINEA PROHIBIDA.
             Elegí una línea que no quieras jugar NUNCA. No prometo mejorar tu
             winrate, pero al menos tendrás una excusa menos cuando pierdas. TODO
             COGIDO!
