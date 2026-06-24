@@ -427,7 +427,11 @@ export default async function TournamentDetailPage({
           )}
         </section>
 
-        <FullMatchHistoryPanel activeTournamentId={tournament.id} isAdmin={isAdmin} />
+        <FullMatchHistoryPanel
+          activeTournamentId={tournament.id}
+          isAdmin={isAdmin}
+          officialStandings={standings}
+        />
       </section>
     </main>
   );

@@ -6,11 +6,38 @@ import DotField from "@/components/effects/dot-field";
 import { FullMatchHistoryPanel } from "@/components/balance/full-match-history-panel";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+type TournamentStandingProfile = {
+  first_name: string | null;
+  last_name: string | null;
+  lol_nick: string | null;
+  lol_tagline: string | null;
+};
+
+type TournamentStandingPlayer = {
+  id: string;
+  user_id: string;
+  initial_rating: number | string;
+  current_rating: number | string;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  profiles: TournamentStandingProfile | null;
+};
+
 type TournamentRow = {
   id: string;
   name: string;
   status: string;
+  tournament_players: TournamentStandingPlayer[];
 };
+
+function getWinrate(wins: number, losses: number) {
+  const total = wins + losses;
+
+  if (total === 0) return 0;
+
+  return Math.round((wins / total) * 100);
+}
 
 export default async function DashboardHistoryPage() {
   const supabase = await createSupabaseServerClient();
@@ -35,13 +62,46 @@ export default async function DashboardHistoryPage() {
 
   const { data: tournamentData } = await supabase
     .from("tournaments")
-    .select("id, name, status")
+    .select(
+      `
+    id,
+    name,
+    status,
+    tournament_players (
+      id,
+      user_id,
+      initial_rating,
+      current_rating,
+      matches_played,
+      wins,
+      losses,
+      profiles (
+        first_name,
+        last_name,
+        lol_nick,
+        lol_tagline
+      )
+    )
+  `,
+    )
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   const activeTournament = tournamentData as TournamentRow | null;
+
+  const officialStandings =
+    activeTournament?.tournament_players?.slice().sort((a, b) => {
+      const aWinrate = getWinrate(a.wins, a.losses);
+      const bWinrate = getWinrate(b.wins, b.losses);
+
+      return (
+        b.wins - a.wins ||
+        bWinrate - aWinrate ||
+        Number(b.current_rating) - Number(a.current_rating)
+      );
+    }) ?? [];
 
   const { data: roleData } = await supabase
     .from("user_roles")
@@ -114,6 +174,7 @@ export default async function DashboardHistoryPage() {
         <FullMatchHistoryPanel
           activeTournamentId={activeTournament?.id ?? null}
           isAdmin={isAdmin}
+          officialStandings={officialStandings}
         />
       </section>
     </main>

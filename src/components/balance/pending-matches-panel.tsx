@@ -110,21 +110,54 @@ function sortByRole(players: MatchPlayerRecord[]) {
   });
 }
 
-function getSecondsRemaining(endsAt: string | null, now: number) {
-  if (!endsAt) return 0;
+const VALE_WINDOW_SECONDS = 60;
 
-  const remaining = Math.ceil((new Date(endsAt).getTime() - now) / 1000);
+function getValeWindowDeadline({
+  startedAt,
+  endsAt,
+}: {
+  startedAt: string | null;
+  endsAt: string | null;
+}) {
+  if (!startedAt && !endsAt) return null;
 
-  return Math.max(0, remaining);
+  const startedDeadline = startedAt
+    ? new Date(new Date(startedAt).getTime() + VALE_WINDOW_SECONDS * 1000)
+    : null;
+
+  const storedDeadline = endsAt ? new Date(endsAt) : null;
+
+  if (startedDeadline && storedDeadline) {
+    return startedDeadline.getTime() <= storedDeadline.getTime()
+      ? startedDeadline
+      : storedDeadline;
+  }
+
+  return startedDeadline ?? storedDeadline;
 }
 
-function formatCountdown(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
+function getValeSecondsRemaining({
+  startedAt,
+  endsAt,
+  now,
+}: {
+  startedAt: string | null;
+  endsAt: string | null;
+  now: number;
+}) {
+  const deadline = getValeWindowDeadline({ startedAt, endsAt });
 
-  return `${String(minutes).padStart(2, "0")}:${String(
-    remainingSeconds,
-  ).padStart(2, "0")}`;
+  if (!deadline) return 0;
+
+  const remaining = Math.ceil((deadline.getTime() - now) / 1000);
+
+  return Math.max(0, Math.min(VALE_WINDOW_SECONDS, remaining));
+}
+
+function formatValeCountdown(seconds: number) {
+  const safeSeconds = Math.max(0, Math.min(VALE_WINDOW_SECONDS, seconds));
+
+  return `${safeSeconds}s`;
 }
 
 function formatTeamName(team: "blue" | "red") {
@@ -677,10 +710,11 @@ export function PendingMatchesPanel({
           return player.user_id === currentUserId;
         });
 
-        const secondsRemaining = getSecondsRemaining(
-          match.vale_window_ends_at,
+        const secondsRemaining = getValeSecondsRemaining({
+          startedAt: match.vale_window_started_at,
+          endsAt: match.vale_window_ends_at,
           now,
-        );
+        });
 
         return isParticipant && secondsRemaining > 0;
       }) ?? null
@@ -714,10 +748,11 @@ export function PendingMatchesPanel({
         }) ?? null)
       : null;
 
-  const activeFloatingSecondsRemaining = getSecondsRemaining(
-    activeFloatingMatch?.vale_window_ends_at ?? null,
+  const activeFloatingSecondsRemaining = getValeSecondsRemaining({
+    startedAt: activeFloatingMatch?.vale_window_started_at ?? null,
+    endsAt: activeFloatingMatch?.vale_window_ends_at ?? null,
     now,
-  );
+  });
 
   const activeFloatingValeWindowOpen = activeFloatingSecondsRemaining > 0;
 
@@ -875,7 +910,7 @@ function FloatingCurrentMatchPanel({
   const statusValue = matchFinished
     ? "Resultado pendiente"
     : valeWindowOpen
-      ? formatCountdown(secondsRemaining)
+      ? formatValeCountdown(secondsRemaining)
       : "En juego";
 
   const balanceScore = Math.round(Number(match.balance_score ?? 0));
@@ -1016,7 +1051,7 @@ function FloatingCurrentMatchPanel({
                         {matchFinished
                           ? "Partida finalizada"
                           : valeWindowOpen
-                            ? `Vale cierra en ${formatCountdown(secondsRemaining)}`
+                            ? `Vale cierra en ${formatValeCountdown(secondsRemaining)}`
                             : "Partida en curso"}
                       </h4>
 

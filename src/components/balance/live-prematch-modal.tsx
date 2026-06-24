@@ -25,6 +25,7 @@ type LivePrematchPlayer = {
 type LivePrematchMatch = {
   id: string;
   match_number: number;
+  vale_window_started_at: string | null;
   vale_window_ends_at: string | null;
   match_players: LivePrematchPlayer[];
 };
@@ -78,21 +79,54 @@ function sortByRole(players: LivePrematchPlayer[]) {
   });
 }
 
-function getSecondsRemaining(endsAt: string | null, now: number) {
-  if (!endsAt) return 0;
+const VALE_WINDOW_SECONDS = 60;
 
-  const remaining = Math.ceil((new Date(endsAt).getTime() - now) / 1000);
+function getValeWindowDeadline({
+  startedAt,
+  endsAt,
+}: {
+  startedAt: string | null;
+  endsAt: string | null;
+}) {
+  if (!startedAt && !endsAt) return null;
 
-  return Math.max(0, remaining);
+  const startedDeadline = startedAt
+    ? new Date(new Date(startedAt).getTime() + VALE_WINDOW_SECONDS * 1000)
+    : null;
+
+  const storedDeadline = endsAt ? new Date(endsAt) : null;
+
+  if (startedDeadline && storedDeadline) {
+    return startedDeadline.getTime() <= storedDeadline.getTime()
+      ? startedDeadline
+      : storedDeadline;
+  }
+
+  return startedDeadline ?? storedDeadline;
 }
 
-function formatCountdown(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
+function getValeSecondsRemaining({
+  startedAt,
+  endsAt,
+  now,
+}: {
+  startedAt: string | null;
+  endsAt: string | null;
+  now: number;
+}) {
+  const deadline = getValeWindowDeadline({ startedAt, endsAt });
 
-  return `${String(minutes).padStart(2, "0")}:${String(
-    remainingSeconds,
-  ).padStart(2, "0")}`;
+  if (!deadline) return 0;
+
+  const remaining = Math.ceil((deadline.getTime() - now) / 1000);
+
+  return Math.max(0, Math.min(VALE_WINDOW_SECONDS, remaining));
+}
+
+function formatValeCountdown(seconds: number) {
+  const safeSeconds = Math.max(0, Math.min(VALE_WINDOW_SECONDS, seconds));
+
+  return `${safeSeconds}s`;
 }
 
 function RoleIcon({ role }: { role: string }) {
@@ -187,7 +221,11 @@ export function LivePrematchModal({
   onUseVale,
   onClose,
 }: LivePrematchModalProps) {
-  const secondsRemaining = getSecondsRemaining(match.vale_window_ends_at, now);
+  const secondsRemaining = getValeSecondsRemaining({
+    startedAt: match.vale_window_started_at,
+    endsAt: match.vale_window_ends_at,
+    now,
+  });
   const valeWindowOpen = secondsRemaining > 0;
 
   const currentPlayer =
@@ -266,7 +304,7 @@ export function LivePrematchModal({
               </div>
 
               <p className="text-3xl font-black text-[#f5f5f3]">
-                {valeWindowOpen ? formatCountdown(secondsRemaining) : "00:00"}
+                {valeWindowOpen ? formatValeCountdown(secondsRemaining) : "0s"}
               </p>
 
               <p className="mt-1 text-xs text-[#8a8a85]">
