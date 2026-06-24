@@ -132,7 +132,7 @@ export function ForbiddenRoleRequiredModal({
 
   return (
     <div className="fixed inset-0 z-9999 flex items-center justify-center overflow-hidden bg-black/76 px-4 py-6 backdrop-blur-md">
-      <div className="pointer-events-none absolute bottom-0 right-18 z-10 hidden h-88 w-88 select-none md:block lg:right-28 lg:h-[30rem] lg:w-[30rem] xl:right-36 xl:h-[34rem] xl:w-[34rem]">
+      <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden h-88 w-88 select-none md:block lg:h-[30rem] lg:w-[30rem] xl:h-[34rem] xl:w-[34rem]">
         <Image
           src="/baneodelineas.png"
           alt=""
