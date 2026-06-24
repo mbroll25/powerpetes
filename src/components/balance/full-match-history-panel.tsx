@@ -1854,8 +1854,8 @@ function TournamentStatsShowcase({
               </h2>
 
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#8a8a85]">
-                Los 3 jugadores mejor posicionados según la tabla oficial del
-                torneo: victorias, winrate y rating actual.
+                Ranking oficial ordenado por rating actual. Las victorias y el
+                winrate se usan como criterios secundarios.
               </p>
             </div>
 
@@ -2426,12 +2426,6 @@ function HistoryTeamCard({
                   {getPlayerKda(player) ? (
                     <p className="mt-1 text-xs text-[#8a8a85]">
                       KDA: {getPlayerKda(player)}
-                    </p>
-                  ) : null}
-
-                  {protectedLoss > 0 ? (
-                    <p className="mt-1 text-xs text-[#75f0a0]">
-                      Pérdida protegida: {Math.round(protectedLoss)} pts
                     </p>
                   ) : null}
                 </div>
