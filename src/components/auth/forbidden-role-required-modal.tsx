@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
@@ -130,8 +131,19 @@ export function ForbiddenRoleRequiredModal({
   }
 
   return (
-    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/76 px-4 py-6 backdrop-blur-md">
-      <section className="relative w-full max-w-3xl overflow-hidden rounded-[1rem] border border-[#f0ed7e]/30 bg-[#101010] p-5 shadow-[0_2rem_6rem_rgba(0,0,0,0.58)] sm:p-6">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center overflow-hidden bg-black/76 px-4 py-6 backdrop-blur-md">
+      <div className="pointer-events-none absolute bottom-0 right-18 z-10 hidden h-88 w-88 select-none md:block lg:right-28 lg:h-[30rem] lg:w-[30rem] xl:right-36 xl:h-[34rem] xl:w-[34rem]">
+        <Image
+          src="/baneodelineas.png"
+          alt=""
+          fill
+          priority
+          sizes="(min-width: 1280px) 34rem, (min-width: 1024px) 30rem, 22rem"
+          className="object-contain object-bottom-right drop-shadow-[0_1.5rem_2.5rem_rgba(0,0,0,0.65)]"
+        />
+      </div>
+
+      <section className="relative z-20 w-full max-w-3xl overflow-hidden rounded-[1rem] border border-[#f0ed7e]/30 bg-[#101010] p-5 shadow-[0_2rem_6rem_rgba(0,0,0,0.58)] sm:p-6">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(240,237,126,0.11),transparent_32%)]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[#f0ed7e]/45 to-transparent" />
 
@@ -149,9 +161,9 @@ export function ForbiddenRoleRequiredModal({
           </h2>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#8a8a85]">
-            Para mejorar el balance de partidas, necesitás indicar una sola
-            línea que no querés jugar nunca. El generador no debería asignarte
-            esa línea.
+            Elegí una línea que no quieras jugar NUNCA. No prometo mejorar tu
+            winrate, pero al menos tendrás una excusa menos cuando pierdas. TODO
+            COGIDO!
           </p>
 
           <div className="mt-5 grid gap-3 rounded-[0.75rem] border border-[#2a2929] bg-[#151414]/80 p-4 sm:grid-cols-2">
