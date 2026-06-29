@@ -245,8 +245,11 @@ export function PendingMatchesPanel({
     null,
   );
   const [now, setNow] = useState(() => Date.now());
+  const [serverNowOffsetMs, setServerNowOffsetMs] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  const serverNow = now + serverNowOffsetMs;
 
   useEffect(() => {
     async function loadCurrentUser() {
@@ -260,6 +263,26 @@ export function PendingMatchesPanel({
     loadCurrentUser();
   }, [supabase]);
 
+  const syncServerNowOffset = useCallback(async () => {
+    const requestStartedAt = Date.now();
+
+    const { data, error } = await supabase.rpc("get_server_now");
+
+    const requestFinishedAt = Date.now();
+
+    if (error || !data) {
+      console.error("No se pudo sincronizar la hora del servidor:", error);
+      return;
+    }
+
+    const estimatedLocalRequestMiddle =
+      requestStartedAt + (requestFinishedAt - requestStartedAt) / 2;
+
+    const serverTime = new Date(data as string).getTime();
+
+    setServerNowOffsetMs(serverTime - estimatedLocalRequestMiddle);
+  }, [supabase]);
+
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setNow(Date.now());
@@ -269,6 +292,18 @@ export function PendingMatchesPanel({
       window.clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    void syncServerNowOffset();
+
+    const intervalId = window.setInterval(() => {
+      void syncServerNowOffset();
+    }, 15000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [syncServerNowOffset]);
 
   const loadPendingMatches = useCallback(async () => {
     setMessage("");
@@ -348,7 +383,7 @@ export function PendingMatchesPanel({
       return;
     }
 
-    const today = getArgentinaDateKey();
+    const today = getArgentinaDateKey(new Date(Date.now() + serverNowOffsetMs));
 
     const { data, error } = await supabase
       .from("daily_vale_usages")
@@ -363,7 +398,7 @@ export function PendingMatchesPanel({
     }
 
     setDailyValeUsage((data ?? null) as DailyValeUsageRecord | null);
-  }, [currentUserId, supabase]);
+  }, [currentUserId, serverNowOffsetMs, supabase]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -499,7 +534,9 @@ export function PendingMatchesPanel({
     setDailyValeUsage({
       user_id: currentUserId,
       match_id: matchId,
-      used_for_date: getArgentinaDateKey(),
+      used_for_date: getArgentinaDateKey(
+        new Date(Date.now() + serverNowOffsetMs),
+      ),
       used_at: usedAt,
     });
 
@@ -713,13 +750,13 @@ export function PendingMatchesPanel({
         const secondsRemaining = getValeSecondsRemaining({
           startedAt: match.vale_window_started_at,
           endsAt: match.vale_window_ends_at,
-          now,
+          now: serverNow,
         });
 
         return isParticipant && secondsRemaining > 0;
       }) ?? null
     );
-  }, [currentUserId, matches, now]);
+  }, [currentUserId, matches, serverNow]);
 
   const showInitialLoading = isLoading && matches.length === 0;
 
@@ -751,7 +788,7 @@ export function PendingMatchesPanel({
   const activeFloatingSecondsRemaining = getValeSecondsRemaining({
     startedAt: activeFloatingMatch?.vale_window_started_at ?? null,
     endsAt: activeFloatingMatch?.vale_window_ends_at ?? null,
-    now,
+    now: serverNow,
   });
 
   const activeFloatingValeWindowOpen = activeFloatingSecondsRemaining > 0;
@@ -819,7 +856,7 @@ export function PendingMatchesPanel({
           match={livePrematchMatch}
           currentUserId={currentUserId}
           dailyValeUsage={dailyValeUsage}
-          now={now}
+          now={serverNow}
           isUsingVale={usingValeMatchId === livePrematchMatch.id}
           onUseVale={handleUseVale}
           onClose={() => setDismissedPrematchMatchId(livePrematchMatch.id)}
