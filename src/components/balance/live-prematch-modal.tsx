@@ -79,7 +79,7 @@ function sortByRole(players: LivePrematchPlayer[]) {
   });
 }
 
-const VALE_WINDOW_SECONDS = 60;
+const VALE_WINDOW_SECONDS = 240;
 
 function getValeWindowDeadline({
   startedAt,
