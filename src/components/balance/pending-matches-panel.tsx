@@ -489,6 +489,19 @@ export function PendingMatchesPanel({
     };
   }, [activeTournamentId, loadPendingMatches, loadDailyValeStatus, supabase]);
 
+  useEffect(() => {
+    if (!activeTournamentId) return;
+
+    const intervalId = window.setInterval(() => {
+      void loadPendingMatches();
+      void loadDailyValeStatus();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [activeTournamentId, loadPendingMatches, loadDailyValeStatus]);
+
   async function handleUseVale(matchId: string) {
     setMessage("");
 
@@ -734,6 +747,17 @@ export function PendingMatchesPanel({
     setMatches((current) => {
       return current.filter((currentMatch) => currentMatch.id !== match.id);
     });
+
+    if (dailyValeUsage?.match_id === match.id) {
+      setDailyValeUsage(null);
+    }
+
+    setDismissedPrematchMatchId(null);
+
+    await loadDailyValeStatus();
+    await loadPendingMatches();
+
+    window.dispatchEvent(new Event("riftbalance:pending-matches-updated"));
 
     router.refresh();
   }

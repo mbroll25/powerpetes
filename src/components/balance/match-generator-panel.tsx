@@ -742,7 +742,7 @@ export function MatchGeneratorPanel({
     setSavedMatchId(matchData.id);
     setSavedMatchNumber(nextMatchNumber);
     setMessage(
-      `Pre-partida #${nextMatchNumber} iniciada. La ventana de vale estará activa durante 60 segundos.`,
+      `Pre-partida #${nextMatchNumber} iniciada. La ventana de vale estará activa durante 4 minutos.`,
     );
 
     window.dispatchEvent(new Event("riftbalance:pending-matches-updated"));
